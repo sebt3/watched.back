@@ -22,7 +22,7 @@ include_directories(SYSTEM ${OPENSSL_INCLUDE_DIR})
 
 #TODO: utiliser find_package pour trouver jsoncpp (pkgconfig) et mysql
 #TODO: utiliser le méthode cmake pour positionner -Wall et -fPIC
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/usr/local/include -Wall -I/usr/include/mysql")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/usr/local/include -Wall -I/usr/include/mysql -I/usr/include/jsoncpp")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L/usr/local/lib")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -L/usr/local/lib -shared -rdynamic -lpthread -lm -ljsoncpp -ldl ")
 
