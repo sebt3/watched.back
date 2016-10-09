@@ -38,7 +38,7 @@ void agentClient::createRessources() {
 	for (Json::Value::iterator i = api["paths"].begin();i!=api["paths"].end();i++) {
 		std::string res = i.key().asString().substr(1, i.key().asString().rfind("/")-1);
 		if (i.key().asString().substr(i.key().asString().rfind("/")+1) != "history") continue; //ignore non-history paths
-		if ( ! i->isMember("get") ) continue;	// ignore non-getter paths
+		if ( ! (*i).isMember("get") ) continue;	// ignore non-getter paths
 
 		// TODO: should check that this $ref actually exist
 		std::string ref = (*i)["get"]["responses"]["200"]["schema"]["items"]["$ref"].asString();
@@ -60,7 +60,7 @@ void agentClient::createRessources() {
 
 		// instanciate a ressourceClient
 		ressourceClient *rc = new ressourceClient(id, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
-		rc ->init();
+		rc->init();
 		ressources.push_back(rc);
 	}
 	mysqlpp::Connection::thread_end();
@@ -158,7 +158,7 @@ void agentClient::init() {
 	ss << resp->content.rdbuf();
 	try {
 		ss >> api;
-	} catch(const Json::RuntimeError& er) {
+	} catch(const Json::RuntimeError er) {
 		std::cerr << "Main json parse failed for agent : " << baseurl << "\n" ;
 		delete client;
 		return;
