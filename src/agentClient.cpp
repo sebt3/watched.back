@@ -36,8 +36,8 @@ void agentClient::createRessources() {
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
 	for (Json::Value::iterator i = api["paths"].begin();i!=api["paths"].end();i++) {
-		std::string res = i.name().substr(1, i.name().rfind("/")-1);
-		if (i.name().substr(i.name().rfind("/")+1) != "history") continue; //ignore non-history paths
+		std::string res = i.key().asString().substr(1, i.key().asString().rfind("/")-1);
+		if (i.key().asString().substr(i.key().asString().rfind("/")+1) != "history") continue; //ignore non-history paths
 		if ( ! i->isMember("get") ) continue;	// ignore non-getter paths
 
 		// TODO: should check that this $ref actually exist
@@ -59,7 +59,7 @@ void agentClient::createRessources() {
 
 
 		// instanciate a ressourceClient
-		ressourceClient *rc = new ressourceClient(id, resid, i.name(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
+		ressourceClient *rc = new ressourceClient(id, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
 		rc ->init();
 		ressources.push_back(rc);
 	}
@@ -72,22 +72,22 @@ void agentClient::createTables() {
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
 	for (Json::Value::iterator i = api["definitions"].begin();i!=api["definitions"].end();i++) {
-		if ( ! haveTable(i.name())) {
+		if ( ! haveTable(i.key().asString())) {
 			std::stringstream ss;
-			ss << "create table " << i.name() << "(" << std::endl;
+			ss << "create table " << i.key().asString() << "(" << std::endl;
 			ss << "\tagent_id\tint(32) unsigned," << std::endl;
 			ss << "\tres_id\t\tint(32) unsigned," << std::endl;
 			ss << "\ttimestamp\tdouble(20,4) unsigned," << std::endl;
 			for (Json::Value::iterator j = (*i)["properties"].begin();j!=(*i)["properties"].end();j++) {
-				if (j.name() == "timestamp") continue;
+				if (j.key().asString() == "timestamp") continue;
 				if ((*j)["type"] == "number")
-					ss << "\t" << j.name() << "\t\tdouble(20,4)," << std::endl;
+					ss << "\t" << j.key().asString() << "\t\tdouble(20,4)," << std::endl;
 				else if ((*j)["type"] == "integer")
-					ss << "\t" << j.name() << "\t\tinteger(32)," << std::endl;
+					ss << "\t" << j.key().asString() << "\t\tinteger(32)," << std::endl;
 				else
 					std::cerr << "Unknown datatype : " << (*j)["type"] << std::endl;
 			}
-			ss << "\tconstraint " << i.name() << "_pk primary key (agent_id,res_id,timestamp)" << std::endl;
+			ss << "\tconstraint " << i.key().asString() << "_pk primary key (agent_id,res_id,timestamp)" << std::endl;
 			ss << ")" << std::endl;
 			mysqlpp::Query query = db->query(ss.str());
 			if (! query.execute()) {
@@ -96,9 +96,9 @@ void agentClient::createTables() {
 		} else {
 			// check for missing columns and add them as needed
 			for (Json::Value::iterator j = (*i)["properties"].begin();j!=(*i)["properties"].end();j++) {
-				if (!tableHasColumn(i.name(), j.name())) {
+				if (!tableHasColumn(i.key().asString(), j.key().asString())) {
 					std::stringstream ss;
-					ss << "alter table " << i.name() << " add " << j.name();
+					ss << "alter table " << i.key().asString() << " add " << j.key().asString();
 					if ((*j)["type"] == "number")
 						ss << " double(20,4)";
 					else if ((*j)["type"] == "integer")

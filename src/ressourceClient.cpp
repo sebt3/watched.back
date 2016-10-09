@@ -11,7 +11,7 @@ void	ressourceClient::init() {
 	std::stringstream insert;
 	insert << "insert into " << table << "(agent_id, res_id";
 	for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
-		insert << ", " << j.name();
+		insert << ", " << j.key().asString();
 	}
 	insert << ") values (" << agt_id << ", " << res_id;
 	baseInsert = insert.str();
@@ -188,7 +188,7 @@ void	ressourceClient::collect() {
 		mysqlpp::Query query = db->query();
 		query << baseInsert;
 		for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
-			query << ", " << line[j.name()];
+			query << ", " << line[j.key().asString()];
 		}
 		query << ")";
 		try {
