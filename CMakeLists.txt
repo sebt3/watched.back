@@ -1,7 +1,10 @@
 cmake_minimum_required (VERSION 2.8.7)
 project (watched.back)
-include(CheckCXXCompilerFlag)
 
+####
+## C++11 Compiler 
+#
+include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 if(COMPILER_SUPPORTS_CXX11)
@@ -12,30 +15,43 @@ else()
 	message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
+####
+## Compiler option
+#
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+
+####
+## Dependencies
+#
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 find_package(Threads REQUIRED)
-
 find_package(Boost 1.53.0 COMPONENTS regex system thread filesystem date_time REQUIRED)
-include_directories(SYSTEM ${Boost_INCLUDE_DIR})
-
 find_package(OpenSSL REQUIRED)
-include_directories(SYSTEM ${OPENSSL_INCLUDE_DIR})
+find_package(Jsoncpp REQUIRED)
+find_package(Mysqlpp REQUIRED)
+include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
 
-#TODO: utiliser find_package pour trouver jsoncpp (pkgconfig) et mysql
-#TODO: utiliser le méthode cmake pour positionner -Wall et -fPIC
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -I/usr/include/mysql -I/usr/include/jsoncpp -I/usr/include/mysql")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L/usr/local/lib")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -L/usr/local/lib -shared -rdynamic -lpthread -lm -ljsoncpp -ldl ")
-
-file (GLOB	      HEADER_FILES "include/*.h")
-file (GLOB    CENTRAL_SOURCE_FILES "src/*.cpp")
-file (GLOB COLLECTORS_SOURCE_FILES "collectors/*.cpp" )
+####
+## Sources
+#
+file (GLOB	   HEADER_FILES "include/*.h")
+file (GLOB    BACK_SOURCE_FILES "src/*.cpp")
 
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/sws)
 install(FILES ${HEADER_FILES} DESTINATION include/watched)
 
-set( CTL_SOURCE_FILES ${CENTRAL_SOURCE_FILES} )
-add_executable(watched.back ${CTL_SOURCE_FILES})
-target_link_libraries(watched.back m jsoncpp pthread dl mysqlpp)
-target_link_libraries(watched.back ${Boost_LIBRARIES})
-target_link_libraries(watched.back ${OPENSSL_LIBRARIES})
-target_link_libraries(watched.back ${CMAKE_THREAD_LIBS_INIT})
+####
+## Targets
+#
+add_executable(watched.back ${BACK_SOURCE_FILES})
+target_link_libraries(watched.back ${MYSQLPP_LIBRARIES} ${JSONCPP_LIBRARIES} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+install(FILES watched.back DESTINATION sbin)
+
+####
+## Usefull debug stuff
+#
+#get_cmake_property(_variableNames VARIABLES)
+#foreach (_variableName ${_variableNames})
+#    message(STATUS "${_variableName}=${${_variableName}}")
+#endforeach()
+

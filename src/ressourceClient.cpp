@@ -84,14 +84,13 @@ void	ressourceClient::collect() {
 	try {
 		resp = client->request("GET", url);
 	} catch (std::exception &e) {
-		std::cerr << "Failed to get :"+url+"\n";
-		std::cerr << e.what() << std::endl;
+		std::cerr << "Failed to get "+url+":" << e.what() << std::endl;
 		return;
 	}
 	ss << resp->content.rdbuf();
 	try {
 		ss >> data;
-	} catch(const Json::RuntimeError er) {
+	} catch(const Json::RuntimeError &er) {
 		std::cerr << "Json parse failed for url : " << url << "\n" ;
 		return;
 	}

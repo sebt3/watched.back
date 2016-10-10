@@ -158,7 +158,7 @@ void agentClient::init() {
 	ss << resp->content.rdbuf();
 	try {
 		ss >> api;
-	} catch(const Json::RuntimeError er) {
+	} catch(const Json::RuntimeError &er) {
 		std::cerr << "Main json parse failed for agent : " << baseurl << "\n" ;
 		delete client;
 		return;

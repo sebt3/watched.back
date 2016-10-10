@@ -9,8 +9,9 @@ before_script:
     - sudo add-apt-repository ppa:apokluda/boost1.53 -y
     - sudo apt-get update -q
     - sudo apt-get install -y libboost1.53-all-dev
-    - sudo apt-get install -y libmysql++-dev libssl-dev libjsoncpp-dev
+    - sudo apt-get install -y libmysql++-dev libssl-dev 
     - sudo apt-get install cmake
+    - ./tools/travis/installdeps.sh
 
 addons:
   apt:
