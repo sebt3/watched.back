@@ -1,16 +1,14 @@
 language: cpp
 os: linux
+sudo: required
+dist: trusty
 
 compiler:
   - gcc
   - clang
     
 before_script:
-    - sudo add-apt-repository ppa:apokluda/boost1.53 -y
-    - sudo apt-get update -q
-    - sudo apt-get install -y libboost1.53-all-dev
-    - sudo apt-get install -y libmysql++-dev libssl-dev 
-    - sudo apt-get install cmake
+    - sudo apt-get install -y libboost1.55-all-dev libmysql++-dev libssl-dev cmake
     - ./tools/travis/installdeps.sh
 
 addons:
