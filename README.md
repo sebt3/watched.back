@@ -1,6 +1,7 @@
 # watched.back
+[![Status](https://travis-ci.org/sebt3/watched.back.svg?branch=master)](https://travis-ci.org/sebt3/watched.back)
 ## Overview
-Watched aim to become a performance analysis and a monitoring tool.
+[Watched](https://sebt3.github.io/watched/) aim to become a performance analysis and a monitoring tool.
 This is the backend. It collect all the performance metrics from the agents. It monitor the metrics, store the data in a mysql database and compute aggregates.
 
 ## Dependencies

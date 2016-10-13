@@ -1,0 +1,13 @@
+[Unit]
+Description=Watched backend
+After=network.target
+
+[Service]
+ExecStart=@CMAKE_INSTALL_PREFIX@/sbin/watched.back
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias=watched.back.service

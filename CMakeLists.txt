@@ -2,6 +2,31 @@ cmake_minimum_required (VERSION 2.8.7)
 project (watched.back)
 
 ####
+## Forbid in-tree building
+#
+if(${CMAKE_SOURCE_DIR} MATCHES ${CMAKE_BINARY_DIR})
+	message(STATUS "Please do an out-of-tree build:")
+	message(STATUS "rm -f CMakeCache.txt && mkdir build && cd build; cmake .. && make")
+	message(FATAL_ERROR "In-tree-build detected!")
+endif(${CMAKE_SOURCE_DIR} MATCHES ${CMAKE_BINARY_DIR})
+
+
+####
+## Default installation path 
+#
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+	set(CMAKE_INSTALL_PREFIX
+		"/usr" CACHE PATH "Default install prefix" FORCE)
+endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+
+# Special case for /etc and /var when prefix is /usr
+if(${CMAKE_INSTALL_PREFIX} STREQUAL "/usr")
+	set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "read-only single-machine data (etc)")
+	set(CMAKE_INSTALL_LOCALSTATEDIR "/var" CACHE PATH "modifiable single-machine data (var)")
+endif(${CMAKE_INSTALL_PREFIX} STREQUAL "/usr")
+include(GNUInstallDirs)
+
+####
 ## C++11 Compiler 
 #
 include(CheckCXXCompilerFlag)
@@ -24,11 +49,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 ## Dependencies
 #
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.53.0 COMPONENTS regex system thread filesystem date_time REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Jsoncpp REQUIRED)
 find_package(Mysqlpp REQUIRED)
+include(${CMAKE_SOURCE_DIR}/cmake/Modules/systemdservice.cmake)
 include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
 
 ####
@@ -39,13 +66,27 @@ file (GLOB    BACK_SOURCE_FILES "src/*.cpp")
 
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/sws)
 install(FILES ${HEADER_FILES} DESTINATION include/watched)
+configure_file ("${PROJECT_SOURCE_DIR}/include/config.h.in"
+                "${PROJECT_BINARY_DIR}/include/config.h" )
+configure_file ("${PROJECT_SOURCE_DIR}/tools/conf/back.config.json.in"
+                "${PROJECT_BINARY_DIR}/back.config.json" )
+include_directories(${PROJECT_BINARY_DIR}/include)
 
+if (SYSTEMD_FOUND)
+	configure_file(
+		"${PROJECT_SOURCE_DIR}/tools/systemd/watched.back.service.in"
+		"${PROJECT_BINARY_DIR}/tools/systemd/watched.back.service"
+		@ONLY)
+	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tools/systemd/watched.back.service"
+		DESTINATION "${SYSTEMD_SERVICES_INSTALL_DIR}")
+endif (SYSTEMD_FOUND)
 ####
 ## Targets
 #
-add_executable(watched.back ${BACK_SOURCE_FILES})
+add_executable(watched.back ${BACK_SOURCE_FILES} ${PROJECT_BINARY_DIR}/back.config.json)
 target_link_libraries(watched.back ${MYSQLPP_LIBRARIES} ${JSONCPP_LIBRARIES} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
-install(FILES watched.back DESTINATION sbin)
+install(TARGETS watched.back DESTINATION sbin COMPONENT binaries)
+install(FILES ${PROJECT_BINARY_DIR}/back.config.json DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/watched COMPONENT config)
 
 ####
 ## Usefull debug stuff

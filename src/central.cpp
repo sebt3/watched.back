@@ -1,13 +1,13 @@
 #include "central.h"
+#include "config.h"
 using namespace watcheD;
 
 const std::string SERVER_HEAD="watched.central/0.1";
 const std::string APPS_NAME="watched.central";
 const std::string APPS_DESC="Watch over wasted being washed up";
-#define CFG_FILE "central.config.json"
 
 int main(int argc, char *argv[]) {
-	Config cfg(CFG_FILE);
+	Config cfg(WATCHED_CONFIG);
 	//Json::Value*	servCfg = cfg.getServer();
 	//Json::Value*	ctlCfg = cfg.getCentral();
 	Json::Value*	dbCfg = cfg.getDB();
