@@ -4,7 +4,7 @@
 #include <mysql++/exceptions.h>
 #include <fstream>
 
-using namespace watcheD;
+namespace watcheD {
 
 /*********************************
  * dbTools
@@ -53,4 +53,6 @@ bool	dbTools::tableHasColumn(std::string p_name, std::string p_col) {
 	}
 	mysqlpp::Connection::thread_end();
 	return false;
+}
+
 }

@@ -7,21 +7,15 @@ const std::string APPS_NAME="watched.central";
 const std::string APPS_DESC="Watch over wasted being washed up";
 
 int main(int argc, char *argv[]) {
-	Config cfg(WATCHED_CONFIG);
-	//Json::Value*	servCfg = cfg.getServer();
-	//Json::Value*	ctlCfg = cfg.getCentral();
-	Json::Value*	dbCfg = cfg.getDB();
-	//int port_i	= (*servCfg)["port"].asInt();
-	//if (argc>1)	port_i = atoi(argv[1]);
+	std::shared_ptr<Config>		cfg	= std::make_shared<Config>(WATCHED_CONFIG);
+	Json::Value*			dbCfg	= cfg->getDB();
 
-	dbPool db(dbCfg);
-
-
-	agentManager ac(&db);
-	cfg.save();
-	ac.init(cfg.getAggregate());
-	cfg.save();
-	ac.startThreads();
+	std::shared_ptr<dbPool>		db	= std::make_shared<dbPool>(dbCfg);
+	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db);
+	cfg->save();
+	ac->init(cfg->getAggregate());
+	cfg->save();
+	ac->startThreads();
 	
 	while (true) {
 		std::this_thread::sleep_for(std::chrono::seconds(10));

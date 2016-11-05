@@ -44,12 +44,12 @@ private:
 	
 class dbTools {
 public:
-	dbTools(dbPool*	p_db) : dbp(p_db) { }
+	dbTools(std::shared_ptr<dbPool>	p_db) : dbp(p_db) { }
 protected:
 	bool	haveRessource(std::string p_name);
 	bool	haveTable(std::string p_name);
 	bool	tableHasColumn(std::string p_name, std::string p_col);
-	dbPool	*dbp;
+	std::shared_ptr<dbPool>	dbp;
 };
 
 /*********************************
@@ -67,7 +67,7 @@ struct event {
 
 class ressourceClient : public dbTools {
 public:
-	ressourceClient(uint32_t p_agtid, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, dbPool*	p_db, HttpClient* p_client) : dbTools(p_db), agt_id(p_agtid), res_id(p_resid), client(p_client), baseurl(p_url), table(p_table), def(p_def) { }
+	ressourceClient(uint32_t p_agtid, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<HttpClient> p_client) : dbTools(p_db), agt_id(p_agtid), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
 	void	init();
 	void	collect();
 
@@ -76,13 +76,13 @@ private:
 
 	uint32_t		agt_id;
 	uint32_t		res_id;
-	HttpClient		*client;
 	std::string		baseurl;
 	std::string		table;
 	Json::Value		*def;
 	std::string		baseInsert;
-	std::vector<struct event*> event_factory;
-	std::map<uint32_t, struct event*> current_events;
+	std::shared_ptr<HttpClient>				client;
+	std::vector< std::shared_ptr<struct event> >		event_factory;
+	std::map<uint32_t, std::shared_ptr<struct event> >	current_events;
 };
 
 /*********************************
@@ -90,7 +90,7 @@ private:
  */
 class agentClient : public dbTools {
 public:
-	agentClient(uint32_t p_id, dbPool* p_db) : dbTools(p_db), ready(false), active(false), id(p_id) { }
+	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db) : dbTools(p_db), ready(false), active(false), id(p_id) { }
 	~agentClient();
 	void	init();
 	void	startThread();
@@ -100,15 +100,15 @@ private:
 	void	createRessources();
 	uint32_t getRessourceId(std::string p_res);
 
-	bool			ready;
-	bool			active;
-	uint32_t		id;
-	HttpClient		*client;
-	std::string		baseurl;
-	Json::Value		api;
-	std::vector<ressourceClient*>		ressources;
-	std::thread		my_thread;
-	uint32_t		pool_freq;
+	bool				ready;
+	bool				active;
+	uint32_t			id;
+	std::shared_ptr<HttpClient>	client;
+	std::string			baseurl;
+	Json::Value			api;
+	std::thread			my_thread;
+	uint32_t			pool_freq;
+	std::vector< std::shared_ptr<ressourceClient> >		ressources;
 };
 
 /*********************************
@@ -116,7 +116,7 @@ private:
  */
 class statAggregator : public dbTools {
 public:
-	statAggregator(dbPool*	p_db, Json::Value* p_aggregCfg);
+	statAggregator(std::shared_ptr<dbPool>	p_db, Json::Value* p_aggregCfg);
 	void	init();
 	void	startThread();
 private:
@@ -132,11 +132,11 @@ private:
  */
 class agentManager : public dbTools {
 public:
-	agentManager(dbPool* p_db) : dbTools(p_db) { }
+	agentManager(std::shared_ptr<dbPool> p_db) : dbTools(p_db) { }
 	void	init(Json::Value* p_aggregCfg);
 	void	startThreads();
 private:
-	std::map<uint32_t, agentClient*>	agents;
-	statAggregator*				aggreg;
+	std::map<uint32_t, std::shared_ptr<agentClient> >	agents;
+	std::shared_ptr<statAggregator>				aggreg;
 };
 }

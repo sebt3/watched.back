@@ -4,11 +4,11 @@
 #include <mysql++/exceptions.h>
 #include <fstream>
 
-using namespace watcheD;
+namespace watcheD {
 
 void	agentManager::init(Json::Value* p_aggregCfg) {
 	// TODO: check for table agents and ressources, create (empty) if not found
-	aggreg  = new statAggregator(dbp, p_aggregCfg);
+	aggreg  = std::make_shared<statAggregator>(dbp, p_aggregCfg);
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
@@ -16,7 +16,7 @@ void	agentManager::init(Json::Value* p_aggregCfg) {
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			mysqlpp::Row row = *it;
-			agents[row[0]] = new agentClient(row[0], dbp);
+			agents[row[0]] = std::make_shared<agentClient>(row[0], dbp);
 			agents[row[0]]->init();
 		}
 	}
@@ -26,7 +26,9 @@ void	agentManager::init(Json::Value* p_aggregCfg) {
 }
 
 void	agentManager::startThreads() {
-	for(std::map<uint32_t, agentClient*>::iterator agtit = agents.begin();agtit != agents.end(); agtit++)
+	for(std::map<uint32_t, std::shared_ptr<agentClient> >::iterator agtit = agents.begin();agtit != agents.end(); agtit++)
 		agents[agtit->first]->startThread();
 	aggreg->startThread();
+}
+
 }

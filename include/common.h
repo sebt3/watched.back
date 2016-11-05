@@ -21,9 +21,7 @@ class Config {
 public:
 	Config(std::string p_fname);
 	void save();
-	Json::Value* 	getCollector(std::string p_name);
 	Json::Value* 	getServer() { return &(data["server"]); }
-	Json::Value* 	getAgent();
 	Json::Value* 	getDB();
 	Json::Value* 	getCentral();
 	Json::Value* 	getAggregate();

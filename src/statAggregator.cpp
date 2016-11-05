@@ -4,9 +4,9 @@
 #include <mysql++/exceptions.h>
 #include <fstream>
 
-using namespace watcheD;
+namespace watcheD {
 
-statAggregator::statAggregator(dbPool*	p_db, Json::Value* p_aggregCfg) : dbTools(p_db), active(false), cfg(p_aggregCfg) {
+statAggregator::statAggregator(std::shared_ptr<dbPool>	p_db, Json::Value* p_aggregCfg) : dbTools(p_db), active(false), cfg(p_aggregCfg) {
 	if(! cfg->isMember("m_delay")) {
 		(*cfg)["m_delay"] = 30;		// 30mns
 		(*cfg)["m_delay"].setComment(std::string("/*\t\tDelay before the data is aggregated in minutes */"), Json::commentAfterOnSameLine);
@@ -167,4 +167,6 @@ void	statAggregator::startThread() {
 			std::this_thread::sleep_for(std::chrono::seconds((*cfg)["m_delay"].asInt()*60));
 		}
 	});
+}
+
 }

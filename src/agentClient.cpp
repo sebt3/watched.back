@@ -4,8 +4,7 @@
 #include <mysql++/exceptions.h>
 #include <fstream>
 
-using namespace watcheD;
-
+namespace watcheD {
 
 uint32_t agentClient::getRessourceId(std::string p_res) {
 	mysqlpp::Connection::thread_start();
@@ -59,7 +58,7 @@ void agentClient::createRessources() {
 
 
 		// instanciate a ressourceClient
-		ressourceClient *rc = new ressourceClient(id, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
+		std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(id, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
 		rc->init();
 		ressources.push_back(rc);
 	}
@@ -146,13 +145,12 @@ void agentClient::init() {
 
 	// then query for its API
 	std::shared_ptr<HttpClient::Response> resp;
-	client = new HttpClient(baseurl);
+	client = std::make_shared<HttpClient>(baseurl);
 	std::stringstream ss;
 	try {
 		resp = client->request("GET", "/api/swagger.json");
 	} catch (std::exception &e) {
 		std::cout << "Failed to connect to the agent, is it down ? \n";
-		delete client;
 		return;
 	}
 	ss << resp->content.rdbuf();
@@ -160,7 +158,6 @@ void agentClient::init() {
 		ss >> api;
 	} catch(const Json::RuntimeError &er) {
 		std::cerr << "Main json parse failed for agent : " << baseurl << "\n" ;
-		delete client;
 		return;
 	}
 	createRessources();
@@ -173,9 +170,11 @@ void agentClient::startThread() {
 	active=true;
 	my_thread = std::thread ([this](){
 		while(this->active) {
-			for (std::vector<ressourceClient*>::iterator it = ressources.begin() ; it != ressources.end(); ++it)
+			for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it)
 				(*it)->collect();
 			std::this_thread::sleep_for(std::chrono::seconds(pool_freq));
 		}
 	});
+}
+
 }

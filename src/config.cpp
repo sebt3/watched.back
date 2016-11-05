@@ -4,8 +4,7 @@
 #include <fstream>
 
 using namespace std;
-using namespace watcheD;
-
+namespace watcheD {
 
 Config::Config(std::string p_fname) : fname(p_fname) {
 	// reading the file
@@ -37,26 +36,6 @@ void 		Config::save() {
 	std::ofstream cfgof (fname, std::ifstream::out);
 	cfgof<<data;
 	cfgof.close();
-}
-
-Json::Value* 	Config::getCollector(std::string p_name) {
-	Json::Value obj_value(Json::objectValue);
-	if(! data.isMember("collectors")) {
-		data["collectors"][p_name] = obj_value;
-		data["collectors"].setComment(std::string("/*\tConfigure the collectors plugins */"), Json::commentBefore);
-	}else if(! data["collectors"].isMember(p_name) ) {
-		data["collectors"][p_name] = obj_value;
-	}
-	return &(data["collectors"][p_name]); 
-}
-
-Json::Value* 	Config::getAgent() { 
-	Json::Value obj_value(Json::objectValue);
-	if(! data.isMember("agent")) {
-		data["agent"] = obj_value;
-		data["agent"].setComment(std::string("/*\tRemote agent specific configuration */"), Json::commentBefore);
-	}
-	return &(data["agent"]); 
 }
 
 Json::Value* 	Config::getAggregate() { 
@@ -105,4 +84,6 @@ Json::Value* 	Config::getDB() {
 	}
 
 	return &(data["db"]);
+}
+
 }

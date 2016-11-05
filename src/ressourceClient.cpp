@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <mysql++/exceptions.h>
 #include <fstream>
+#include <memory>
 
-using namespace watcheD;
+namespace watcheD {
 
 void	ressourceClient::init() {
 	// define the base insert string
@@ -25,7 +26,7 @@ void	ressourceClient::init() {
 	if (mysqlpp::StoreQueryResult r1 = q1.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator i1= r1.begin(); i1 != r1.end(); ++i1) {
 			mysqlpp::Row row	= *i1;
-			struct event *e 	= new event;
+			std::shared_ptr<struct event> e 	= std::make_shared<struct event>();
 			e->event_type		= row[1];
 			e->property		= row[2].c_str();
 			e->oper			= row[3].c_str()[0];
@@ -43,7 +44,7 @@ void	ressourceClient::init() {
 	if (mysqlpp::StoreQueryResult r2 = q2.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator i2= r2.begin(); i2 != r2.end(); ++i2) {
 			mysqlpp::Row row = *i2;
-			struct event *e = new event;
+			std::shared_ptr<struct event> e = std::make_shared<event>();
 			e->event_type	= row[0];
 			e->property	= row[1].c_str();
 			e->oper		= row[2].c_str()[0];
@@ -102,8 +103,8 @@ void	ressourceClient::collect() {
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
 	for (const Json::Value& line : data) {
 		// compare values to the factory
-		for (std::vector<struct event*>::iterator it = event_factory.begin() ; it != event_factory.end(); ++it) {
-			struct event *e = *it;
+		for (std::vector< std::shared_ptr<struct event> >::iterator it = event_factory.begin() ; it != event_factory.end(); ++it) {
+			std::shared_ptr<struct event> e = *it;
 			if (line.isMember(e->property) && ! line[e->property].isNull() ) {
 				bool trig = false;
 				switch (e->oper) {
@@ -119,8 +120,8 @@ void	ressourceClient::collect() {
 				}
 				if (trig) {
 					uint32_t found = 0;
-					for(std::map<uint32_t, struct event*>::iterator i = current_events.begin();i != current_events.end();i++) {
-						struct event *f = i->second;
+					for(std::map<uint32_t, std::shared_ptr<struct event> >::iterator i = current_events.begin();i != current_events.end();i++) {
+						std::shared_ptr<struct event> f = i->second;
 						if (*e == *f)
 							found  = i->first;
 					}
@@ -141,7 +142,7 @@ void	ressourceClient::collect() {
 					}
 
 					if (found == 0) {
-						current_events[query.insert_id()] = new event(*e);
+						current_events[query.insert_id()] = std::make_shared<event>(*e);
 						std::cout << "adding the event to the known event " << query.insert_id() << " -> " << current_events[query.insert_id()]->value << "\n";
 					}
 				}
@@ -149,8 +150,8 @@ void	ressourceClient::collect() {
 		}
 
 		// check for existing events done
-		for(std::map<uint32_t, struct event*>::iterator i = current_events.begin();i != current_events.end();i++) {
-			struct event *e = i->second;
+		for(std::map<uint32_t, std::shared_ptr<struct event> >::iterator i = current_events.begin();i != current_events.end();i++) {
+			std::shared_ptr<struct event> e = i->second;
 			uint32_t id = i->first;
 			if (line.isMember(e->property) && ! line[e->property].isNull() ) {
 				bool trig = false;
@@ -177,7 +178,6 @@ void	ressourceClient::collect() {
 					} catch(const mysqlpp::BadQuery& er) {
 						std::cerr << "Query error: " << er.what() << std::endl;
 					}
-					delete current_events[id];
 					current_events.erase(id);
 				} //else { std::cout << line[e->property].asDouble() << " - " << e->value << "\n"; }
 			} else { std::cout << "Woops\n"; }
@@ -200,4 +200,6 @@ void	ressourceClient::collect() {
 		}
 	}
 	mysqlpp::Connection::thread_end();
+}
+
 }
