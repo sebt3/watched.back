@@ -46,43 +46,63 @@ class dbTools {
 public:
 	dbTools(std::shared_ptr<dbPool>	p_db) : dbp(p_db) { }
 protected:
-	bool	haveRessource(std::string p_name);
-	bool	haveTable(std::string p_name);
-	bool	tableHasColumn(std::string p_name, std::string p_col);
+	bool		haveTable(std::string p_name);
+	bool		tableHasColumn(std::string p_name, std::string p_col);
+	bool		haveRessource(std::string p_name);
+	uint32_t	getRessourceId(std::string p_res);
+	bool		haveHost(std::string p_host_name);
+	uint32_t	getHost(std::string p_host_name);
+	bool		haveService(uint32_t p_host_id, std::string p_service);
+	uint32_t	getService(uint32_t p_host_id, std::string p_service);
 	std::shared_ptr<dbPool>	dbp;
 };
 
 /*********************************
  * ressourceClient
  */
-struct event {
+struct res_event {
 	uint32_t	event_type;
 	std::string	property;
 	char		oper;
 	double		value;
-	inline bool operator==(const event& l) const {
+	inline bool operator==(const res_event& l) const {
 		return ( (l.event_type == event_type) && (l.property == property) && (l.oper == oper) && (l.value == value) );
 	}
 };
 
 class ressourceClient : public dbTools {
 public:
-	ressourceClient(uint32_t p_agtid, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<HttpClient> p_client) : dbTools(p_db), agt_id(p_agtid), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
+	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<HttpClient> p_client) : dbTools(p_db), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
 	void	init();
 	void	collect();
 
 private:
 	double  getSince();
 
-	uint32_t		agt_id;
+	uint32_t		host_id;
 	uint32_t		res_id;
 	std::string		baseurl;
 	std::string		table;
 	Json::Value		*def;
 	std::string		baseInsert;
 	std::shared_ptr<HttpClient>				client;
-	std::vector< std::shared_ptr<struct event> >		event_factory;
-	std::map<uint32_t, std::shared_ptr<struct event> >	current_events;
+	std::vector< std::shared_ptr<struct res_event> >	event_factory;
+	std::map<uint32_t, std::shared_ptr<struct res_event> >	current_events;
+};
+
+/*********************************
+ * servicesClient
+ */
+class servicesClient : public dbTools {
+public:
+	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<HttpClient> p_client): dbTools(p_db), agt_id(p_agt_id), client(p_client) { }
+	void	init();
+	void	collect();
+private:
+	uint32_t		agt_id;
+	std::shared_ptr<HttpClient>				client;
+	/*std::vector< std::shared_ptr<struct event> >		event_factory;
+	std::map<uint32_t, std::shared_ptr<struct event> >	current_events;*/
 };
 
 /*********************************
@@ -90,7 +110,7 @@ private:
  */
 class agentClient : public dbTools {
 public:
-	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db) : dbTools(p_db), ready(false), active(false), id(p_id) { }
+	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db);
 	~agentClient();
 	void	init();
 	void	startThread();
@@ -98,7 +118,6 @@ public:
 private:
 	void	createTables();
 	void	createRessources();
-	uint32_t getRessourceId(std::string p_res);
 
 	bool				ready;
 	bool				active;
@@ -108,6 +127,7 @@ private:
 	Json::Value			api;
 	std::thread			my_thread;
 	uint32_t			pool_freq;
+	std::shared_ptr<servicesClient>	services;
 	std::vector< std::shared_ptr<ressourceClient> >		ressources;
 };
 
@@ -126,6 +146,7 @@ private:
 	std::thread		my_thread;
 	Json::Value* 		cfg;
 };
+
 
 /*********************************
  * agentManager

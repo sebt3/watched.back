@@ -1,2 +1,10 @@
 {
+        "db" : 
+        {
+		"connection_string" : "localhost:3306", /*	MySQL database connection string */
+		"database_name" : "watcheddb", /*		MySQL database name */
+		"login" : "watched", /*				MySQL login */
+		"password" : "watched", /*			MySQL password */
+		"pool_size" : 32 /*				Number of concurrent connections to the database */
+	}
 }

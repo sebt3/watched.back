@@ -12,12 +12,13 @@ create table ressources (
 	id int(32)	unsigned auto_increment, 
 	name		varchar(256) not null,
 	type		varchar(256) not null,
-	constraint ressources_pk primary key (id), constraint unique index ressources_u (name)
+	constraint ressources_pk primary key (id),
+	constraint unique index ressources_u (name)
 );
-create table agent_ressources(
-	agent_id	int(32) unsigned, 
+create table host_ressources(
+	host_id		int(32) unsigned, 
 	res_id		int(32) unsigned, 
-	constraint agent_ressources_pk primary key (agent_id,res_id)
+	constraint host_ressources_pk primary key (host_id,res_id)
 );
 create table domains(
 	id		int(32) unsigned auto_increment,
@@ -28,10 +29,11 @@ create table domains(
 create table event_types(
 	id		int(32) unsigned auto_increment, 
 	name		varchar(256) not null,
-	constraint event_types_pk primary key(id), constraint unique index event_types_u(name)
+	constraint event_types_pk primary key(id),
+	constraint unique index event_types_u(name)
 );
 create table event_factory(
-	agent_id	int(32) unsigned,
+	host_id		int(32) unsigned,
 	res_id		int(32) unsigned,
 	res_type	varchar(256),
 	event_type 	int(32) unsigned not null,
@@ -39,9 +41,9 @@ create table event_factory(
 	oper		char not null,
 	value		double(20,4) not null
 );
-create table events(
+create table res_events(
 	id		int(32) unsigned auto_increment,
-	agent_id	int(32) unsigned not null,
+	host_id		int(32) unsigned not null,
 	res_id		int(32) unsigned not null,
 	start_time	double(20,4) unsigned not null,
 	end_time	double(20,4) unsigned,
@@ -53,13 +55,48 @@ create table events(
 	constraint events_pk primary key(id)
 );
 
+create table hosts(
+	id		int(32) unsigned auto_increment,
+	name		varchar(256) not null,
+	constraint hosts_pk primary key(id),
+	constraint unique index hosts_name_u(name)
+);
+
+create table services (
+	id		int(32) unsigned auto_increment,
+	host_id		int(32) unsigned,
+	name		varchar(256) not null,
+	constraint hosts_pk primary key(id),
+	constraint unique index services_u(host_id, name)
+);
+
+create table serviceSockets (
+	serv_id		int(32) unsigned,
+	name		varchar(256) not null,
+	status		varchar(256),
+	timestamp	double(20,4) unsigned,
+	constraint unique index serviceSockets_u(serv_id, name)
+);
+
+create table serviceProcess (
+	serv_id		int(32) unsigned,
+	name		varchar(256) not null,
+	full_path	varchar(256),
+	cwd		varchar(256),
+	username	varchar(256),
+	pid		int(32) unsigned,
+	status		varchar(256),
+	timestamp	double(20,4) unsigned,
+	constraint unique index serviceProcess_u(serv_id, name)
+);
+
 create view live_tables as select distinct type as table_name from ressources;
 create view monitoring_items as
-select ar.*, r.name as res_name, r.type as res_type, ef.agent_id as factory_agent_id, ef.res_id as factory_res_id, ef.res_type as factory_res_type, ef.event_type, et.name as event_name, ef.property, ef.oper, ef.value
-  from ressources r, agent_ressources ar, event_factory ef, event_types et
+select ar.*, r.name as res_name, r.type as res_type, ef.host_id as factory_host_id, ef.res_id as factory_res_id, ef.res_type as factory_res_type, ef.event_type, et.name as event_name, ef.property, ef.oper, ef.value
+  from ressources r, host_ressources ar, event_factory ef, event_types et
  where ar.res_id=r.id
    and ef.event_type = et.id
-   and (ef.agent_id =ar.agent_id or ef.agent_id is null) and (ef.res_id=ar.res_id or ef.res_id is null) and (ef.res_type=r.type or ef.res_type is null);
+   and (ef.host_id =ar.host_id or ef.host_id is null) and (ef.res_id=ar.res_id or ef.res_id is null) and (ef.res_type=r.type or ef.res_type is null);
 
 
 insert into domains(name) values ("Production"),("Qualification"),("Testing"),("Developpement");

@@ -44,15 +44,15 @@ void	statAggregator::init(){
 			std::string colh;
 			bool haveAM		= haveTable("am$"+tbl);
 			bool haveAH		= haveTable("ah$"+tbl);
-			std::string create_am	= "create table am$"+tbl+" as select agent_id,res_id, floor(timestamp/60000)*60000.0000 as timestamp ";
-			std::string create_ah	= "create table ah$"+tbl+" as select agent_id,res_id, floor(timestamp/3600000)*3600000.0000 as timestamp ";
-			base_am[tbl]		= "insert into am$"+tbl+" select d.agent_id,d.res_id, floor(d.timestamp/60000)*60000.0000 as timestamp ";
-			base_ah[tbl]		= "insert into ah$"+tbl+" select d.agent_id,d.res_id, floor(d.timestamp/3600000)*3600000.0000 as timestamp ";
+			std::string create_am	= "create table am$"+tbl+" as select host_id, res_id, floor(timestamp/60000)*60000.0000 as timestamp ";
+			std::string create_ah	= "create table ah$"+tbl+" as select host_id, res_id, floor(timestamp/3600000)*3600000.0000 as timestamp ";
+			base_am[tbl]		= "insert into am$"+tbl+" select d.host_id, d.res_id, floor(d.timestamp/60000)*60000.0000 as timestamp ";
+			base_ah[tbl]		= "insert into ah$"+tbl+" select d.host_id, d.res_id, floor(d.timestamp/3600000)*3600000.0000 as timestamp ";
 			
 			mysqlpp::Query qcols = db->query();
 			
 			qcols 	<< "select col.column_name from information_schema.columns col where col.TABLE_SCHEMA=DATABASE() and col.table_name = '" << tbl 
-				<< "' and col.data_type in ('int', 'double') and column_name not in ('agent_id', 'res_id', 'timestamp')";
+				<< "' and col.data_type in ('int', 'double') and column_name not in ('host_id', 'res_id', 'timestamp')";
 			if (mysqlpp::StoreQueryResult resc = qcols.store()) {
 				for (mysqlpp::StoreQueryResult::const_iterator itc= resc.begin(); itc != resc.end(); ++itc) {
 					std::string col = (*itc)[0].c_str();
@@ -71,30 +71,36 @@ void	statAggregator::init(){
 						// TODO: add the missing avg,min,max columns
 					}
 				}
-				base_am[tbl]+= "from "+tbl+" d, (select u.agent_id, u.res_id, max(u.timestamp) as timestamp from (select x.agent_id, x.res_id, max(x.timestamp) as timestamp from am$"+tbl+" x group by x.agent_id, x.res_id union all select z.agent_id, z.res_id, 0.0000 as timestamp from "+tbl+" z group by z.agent_id, z.res_id) u group by u.agent_id, u.res_id) y where floor(d.timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" and floor(d.timestamp/60000)*60000>y.timestamp and d.agent_id=y.agent_id and d.res_id=y.res_id group by d.agent_id,d.res_id, floor(d.timestamp/60000)";
-				base_ah[tbl]+= "from am$"+tbl+" d, (select u.agent_id, u.res_id, max(u.timestamp) as timestamp from (select x.agent_id, x.res_id, max(x.timestamp) as timestamp from ah$"+tbl+" x group by x.agent_id, x.res_id union all select z.agent_id, z.res_id, 0.0000 as timestamp from am$"+tbl+" z group by z.agent_id, z.res_id) u group by u.agent_id, u.res_id) y where floor(d.timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" and floor(d.timestamp/3600000)*3600000>y.timestamp and d.agent_id=y.agent_id and d.res_id=y.res_id group by d.agent_id,d.res_id, floor(d.timestamp/3600000)";
+				base_am[tbl]+= "from "+tbl+" d, (select u.host_id, u.res_id, max(u.timestamp) as timestamp from (select x.host_id, x.res_id, max(x.timestamp) as timestamp from am$"+tbl+" x group by x.host_id, x.res_id union all select z.host_id, z.res_id, 0.0000 as timestamp from "+tbl+" z group by z.host_id, z.res_id) u group by u.host_id, u.res_id) y where floor(d.timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" and floor(d.timestamp/60000)*60000>y.timestamp and d.host_id=y.host_id and d.res_id=y.res_id group by d.host_id,d.res_id, floor(d.timestamp/60000)*60000.0000";
+				base_ah[tbl]+= "from am$"+tbl+" d, (select u.host_id, u.res_id, max(u.timestamp) as timestamp from (select x.host_id, x.res_id, max(x.timestamp) as timestamp from ah$"+tbl+" x group by x.host_id, x.res_id union all select z.host_id, z.res_id, 0.0000 as timestamp from am$"+tbl+" z group by z.host_id, z.res_id) u group by u.host_id, u.res_id) y where floor(d.timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" and floor(d.timestamp/3600000)*3600000>y.timestamp and d.host_id=y.host_id and d.res_id=y.res_id group by d.host_id,d.res_id, floor(d.timestamp/3600000)*3600000.0000";
 				
 				if(!haveAM) {
-					create_am += "from "+tbl+" where floor(timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" group by agent_id,res_id, floor(timestamp/60000)";
+					create_am += "from "+tbl+" where floor(timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" group by host_id,res_id, floor(timestamp/60000)*60000.0000";
 					mysqlpp::Query qam = db->query(create_am);
+					try {
 					if (! qam.execute()) {
 						std::cerr << "Failed to " << create_am << std::endl;
 					}
-					mysqlpp::Query qama = db->query("alter table am$"+tbl+" add constraint primary key (agent_id, res_id, timestamp)");
+					} catch(const mysqlpp::BadQuery& er) {
+						std::cerr << "Query error: " << er.what() << std::endl;
+						std::cerr << "Query: " << create_am << std::endl;
+					}
+
+					mysqlpp::Query qama = db->query("alter table am$"+tbl+" add constraint primary key (host_id, res_id, timestamp)");
 					if (! qama.execute()) {
-						std::cerr << "Failed to alter table am$"+tbl+" add constraint primary key (agent_id, res_id, timestamp)" << std::endl;
+						std::cerr << "Failed to alter table am$"+tbl+" add constraint primary key (host_id, res_id, timestamp)" << std::endl;
 					}
 				}
 				if(!haveAH) {
-					create_ah += "from am$"+tbl+" where floor(timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" group by agent_id,res_id, floor(timestamp/3600000)";
+					create_ah += "from am$"+tbl+" where floor(timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" group by host_id,res_id, floor(timestamp/3600000)*3600000.0000";
 
 					mysqlpp::Query qah = db->query(create_ah);
 					if (! qah.execute()) {
 						std::cerr << "Failed to " << create_ah << std::endl;
 					}
-					mysqlpp::Query qaha = db->query("alter table ah$"+tbl+" add constraint primary key (agent_id, res_id, timestamp)");
+					mysqlpp::Query qaha = db->query("alter table ah$"+tbl+" add constraint primary key (host_id, res_id, timestamp)");
 					if (! qaha.execute()) {
-						std::cerr << "Failed to alter table ah$"+tbl+" add constraint primary key (agent_id, res_id, timestamp)" << std::endl;
+						std::cerr << "Failed to alter table ah$"+tbl+" add constraint primary key (host_id, res_id, timestamp)" << std::endl;
 					}
 				}
 			}

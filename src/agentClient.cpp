@@ -6,20 +6,7 @@
 
 namespace watcheD {
 
-uint32_t agentClient::getRessourceId(std::string p_res) {
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return 0; }
-	mysqlpp::Query query = db->query();
-	query << "select id from ressources where name=" << mysqlpp::quote << p_res;
-	if (mysqlpp::StoreQueryResult res = query.store()) {
-		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
-		mysqlpp::Connection::thread_end();
-		return int(row[0]);
-		
-	}
-	mysqlpp::Connection::thread_end();
-	return 0;
+agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db) : dbTools(p_db), ready(false), active(false), id(p_id) {
 }
 
 agentClient::~agentClient() {
@@ -49,16 +36,17 @@ void agentClient::createRessources() {
 			}
 		}
 		uint32_t resid = getRessourceId(res);
+		uint32_t hostid = getHost((*i)["x-host"].asString());
 		if (resid==0) continue;
 
-		mysqlpp::Query q = db->query("insert into agent_ressources(agent_id,res_id) values ("+std::to_string(id)+","+std::to_string(resid)+") ON DUPLICATE KEY UPDATE res_id=res_id");
+		mysqlpp::Query q = db->query("insert into host_ressources(host_id,res_id) values ("+std::to_string(hostid)+","+std::to_string(resid)+") ON DUPLICATE KEY UPDATE res_id=res_id");
 		if (! q.execute()) {
-			std::cerr << "Failed to insert agent_ressource: " << std::to_string(id) << ", " << res << std::endl;
+			std::cerr << "Failed to insert host_ressources: " << std::to_string(hostid) << ", " << res << std::endl;
 		}
 
 
 		// instanciate a ressourceClient
-		std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(id, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
+		std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(hostid, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
 		rc->init();
 		ressources.push_back(rc);
 	}
@@ -71,10 +59,15 @@ void agentClient::createTables() {
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
 	for (Json::Value::iterator i = api["definitions"].begin();i!=api["definitions"].end();i++) {
+		std::string serv = "service";
+		if (i.key().asString().substr(0,serv.size()) == serv) {
+			//TODO: Create tables for services too
+			continue; // ignore service definitions
+		}
 		if ( ! haveTable(i.key().asString())) {
 			std::stringstream ss;
 			ss << "create table " << i.key().asString() << "(" << std::endl;
-			ss << "\tagent_id\tint(32) unsigned," << std::endl;
+			ss << "\thost_id\tint(32) unsigned," << std::endl;
 			ss << "\tres_id\t\tint(32) unsigned," << std::endl;
 			ss << "\ttimestamp\tdouble(20,4) unsigned," << std::endl;
 			for (Json::Value::iterator j = (*i)["properties"].begin();j!=(*i)["properties"].end();j++) {
@@ -86,7 +79,7 @@ void agentClient::createTables() {
 				else
 					std::cerr << "Unknown datatype : " << (*j)["type"] << std::endl;
 			}
-			ss << "\tconstraint " << i.key().asString() << "_pk primary key (agent_id,res_id,timestamp)" << std::endl;
+			ss << "\tconstraint " << i.key().asString() << "_pk primary key (host_id,res_id,timestamp)" << std::endl;
 			ss << ")" << std::endl;
 			mysqlpp::Query query = db->query(ss.str());
 			if (! query.execute()) {
@@ -119,6 +112,7 @@ void agentClient::createTables() {
 }
 
 void agentClient::init() {
+	if (ready) return;
 	// 1st build the base URL
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
@@ -162,6 +156,8 @@ void agentClient::init() {
 	}
 	createRessources();
 	createTables();
+	services = std::make_shared<servicesClient>(id, dbp, client);
+	services->init();
 	ready = true;
 }
 
@@ -170,6 +166,7 @@ void agentClient::startThread() {
 	active=true;
 	my_thread = std::thread ([this](){
 		while(this->active) {
+			services->collect();
 			for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it)
 				(*it)->collect();
 			std::this_thread::sleep_for(std::chrono::seconds(pool_freq));
