@@ -44,11 +44,18 @@ void agentClient::createRessources() {
 			std::cerr << "Failed to insert host_ressources: " << std::to_string(hostid) << ", " << res << std::endl;
 		}
 
+		bool found=false;
+		for (std::vector< std::shared_ptr<ressourceClient> >::iterator j=ressources.begin();j!=ressources.end();j++) {
+			if ( (*j)->getBaseUrl() == i.key().asString() )
+				found = true;
+		}
 
-		// instanciate a ressourceClient
-		std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(hostid, resid, i.key().asString(), tbl, &(api["definitions"][tbl]["properties"]), dbp, client);
-		rc->init();
-		ressources.push_back(rc);
+		if(!found) {
+			// instanciate a ressourceClient
+			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(hostid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, client);
+			rc->init();
+			ressources.push_back(rc);
+		}
 	}
 	mysqlpp::Connection::thread_end();
 }
@@ -111,6 +118,30 @@ void agentClient::createTables() {
 	mysqlpp::Connection::thread_end();
 }
 
+void agentClient::updateApi() {
+	// then query for its API
+	if (!ready) {
+		init();
+		return; // API update will occur during init
+	}
+	std::shared_ptr<HttpClient::Response> resp;
+	std::stringstream ss;
+	try {
+		resp = client->request("GET", "/api/swagger.json");
+	} catch (std::exception &e) {
+		std::cout << "Failed to connect to the agent, is it down ? \n";
+		return;
+	}
+	ss << resp->content.rdbuf();
+	try {
+		ss >> api;
+	} catch(const Json::RuntimeError &er) {
+		std::cerr << "Main json parse failed for agent : " << baseurl << "\n" ;
+		return;
+	}
+	createRessources();
+	createTables();
+}
 void agentClient::init() {
 	if (ready) return;
 	// 1st build the base URL
@@ -136,28 +167,11 @@ void agentClient::init() {
 		return;
 	}
 	mysqlpp::Connection::thread_end();
-
-	// then query for its API
-	std::shared_ptr<HttpClient::Response> resp;
 	client = std::make_shared<HttpClient>(baseurl);
-	std::stringstream ss;
-	try {
-		resp = client->request("GET", "/api/swagger.json");
-	} catch (std::exception &e) {
-		std::cout << "Failed to connect to the agent, is it down ? \n";
-		return;
-	}
-	ss << resp->content.rdbuf();
-	try {
-		ss >> api;
-	} catch(const Json::RuntimeError &er) {
-		std::cerr << "Main json parse failed for agent : " << baseurl << "\n" ;
-		return;
-	}
-	createRessources();
-	createTables();
+
 	services = std::make_shared<servicesClient>(id, dbp, client);
 	services->init();
+	updateApi();
 	ready = true;
 }
 

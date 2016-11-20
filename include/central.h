@@ -75,6 +75,7 @@ public:
 	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<HttpClient> p_client) : dbTools(p_db), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
 	void	init();
 	void	collect();
+	std::string	getBaseUrl() { return baseurl; }
 
 private:
 	double  getSince();
@@ -113,6 +114,7 @@ public:
 	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db);
 	~agentClient();
 	void	init();
+	void	updateApi();
 	void	startThread();
 
 private:
@@ -156,6 +158,7 @@ public:
 	agentManager(std::shared_ptr<dbPool> p_db) : dbTools(p_db) { }
 	void	init(Json::Value* p_aggregCfg);
 	void	startThreads();
+	void	updateAgents();
 private:
 	std::map<uint32_t, std::shared_ptr<agentClient> >	agents;
 	std::shared_ptr<statAggregator>				aggreg;
