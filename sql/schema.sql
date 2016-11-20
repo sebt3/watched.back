@@ -4,7 +4,6 @@ create table agents (
 	port 		int(32) unsigned not null,
 	pool_freq 	int(32) unsigned default 300,
 	central_id 	int(32) not null default 1,
-	domain_id	int(32),
 	constraint agent_pk primary key (id),
 	constraint unique index agent_u (host, port)
 );
@@ -58,6 +57,7 @@ create table res_events(
 create table hosts(
 	id		int(32) unsigned auto_increment,
 	name		varchar(256) not null,
+	domain_id	int(32),
 	constraint hosts_pk primary key(id),
 	constraint unique index hosts_name_u(name)
 );
@@ -71,7 +71,7 @@ create table services (
 );
 
 create table serviceSockets (
-	serv_id		int(32) unsigned,
+	serv_id		int(32) unsigned  not null,
 	name		varchar(256) not null,
 	status		varchar(256),
 	timestamp	double(20,4) unsigned,
@@ -79,7 +79,7 @@ create table serviceSockets (
 );
 
 create table serviceProcess (
-	serv_id		int(32) unsigned,
+	serv_id		int(32) unsigned not null,
 	name		varchar(256) not null,
 	full_path	varchar(256),
 	cwd		varchar(256),
@@ -90,6 +90,15 @@ create table serviceProcess (
 	constraint unique index serviceProcess_u(serv_id, name)
 );
 
+create table serviceHistory (
+	serv_id		int(32) unsigned not null,
+	timestamp	double(20,4) unsigned not null,
+	failed		int(32) unsigned not null,
+	missing		int(32) unsigned not null,
+	ok		int(32) unsigned not null,
+	constraint unique index serviceHistory_u(serv_id, timestamp)
+);
+
 create view live_tables as select distinct type as table_name from ressources;
 create view monitoring_items as
 select ar.*, r.name as res_name, r.type as res_type, ef.host_id as factory_host_id, ef.res_id as factory_res_id, ef.res_type as factory_res_type, ef.event_type, et.name as event_name, ef.property, ef.oper, ef.value
@@ -97,7 +106,10 @@ select ar.*, r.name as res_name, r.type as res_type, ef.host_id as factory_host_
  where ar.res_id=r.id
    and ef.event_type = et.id
    and (ef.host_id =ar.host_id or ef.host_id is null) and (ef.res_id=ar.res_id or ef.res_id is null) and (ef.res_type=r.type or ef.res_type is null);
-
+create view failed_services as
+select min(timestamp) as timestamp, status, serv_id from serviceSockets  where (UNIX_TIMESTAMP()*1000-timestamp)/1000>60*15 or status not like 'ok%' group by status, serv_id
+union
+select min(timestamp) as timestamp, status, serv_id from serviceProcess where (UNIX_TIMESTAMP()*1000-timestamp)/1000>60*15 or status not like 'ok%' group by status, serv_id;
 
 insert into domains(name) values ("Production"),("Qualification"),("Testing"),("Developpement");
 insert into agents(host,port) values('localhost',9080);
