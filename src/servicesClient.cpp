@@ -8,7 +8,6 @@ void	servicesClient::init() {
 }
 
 void	servicesClient::collect() {
-	std::cout << "servicesClient::collect\n";
 
 	// 1st: get the data from the client
 	Json::Value data;
@@ -117,7 +116,7 @@ void	servicesClient::collect() {
 			std::cerr << "Query error: " << er.what() << std::endl;
 		}
 	}
-	
+
 	// update history for missing service on known hosts
 	for (std::set<uint32_t>::iterator i = hosts.begin();i!=hosts.end();i++) {
 		mysqlpp::Query p = db->query(

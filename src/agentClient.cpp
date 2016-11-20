@@ -129,7 +129,7 @@ void agentClient::updateApi() {
 	try {
 		resp = client->request("GET", "/api/swagger.json");
 	} catch (std::exception &e) {
-		std::cout << "Failed to connect to the agent, is it down ? \n";
+		std::cout << "Failed to connect to the agent "<< id <<"("<< baseurl << "), is it down ? \n";
 		return;
 	}
 	ss << resp->content.rdbuf();
@@ -141,7 +141,9 @@ void agentClient::updateApi() {
 	}
 	createRessources();
 	createTables();
+	std::cout << "Agent "<< id <<"("<< baseurl << "), API knowledge updated\n";
 }
+
 void agentClient::init() {
 	if (ready) return;
 	// 1st build the base URL
@@ -171,11 +173,14 @@ void agentClient::init() {
 
 	services = std::make_shared<servicesClient>(id, dbp, client);
 	services->init();
-	updateApi();
+
 	ready = true;
+	updateApi();
 }
 
 void agentClient::startThread() {
+	if (!api.isMember("paths"))
+		updateApi();
 	if (!ready || active) return;
 	active=true;
 	my_thread = std::thread ([this](){

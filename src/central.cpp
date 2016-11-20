@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 	ac->startThreads();
 	
 	while (true) {
-		std::this_thread::sleep_for(std::chrono::seconds(5*60));
+		std::this_thread::sleep_for(std::chrono::seconds(5*60)); // TODO: should configure this
 		ac->updateAgents();
 		ac->startThreads(); // starting missing agents
 	}
