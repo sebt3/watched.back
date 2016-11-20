@@ -63,8 +63,7 @@ double  ressourceClient::getSince() {
 	query << "select max(timestamp) from "+table+" where host_id=" << host_id << " and res_id=" << res_id;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
-		if (row[0]!=mysqlpp::null){
-			//std::cout << row[0] << std::endl;
+		if (row[0]!=mysqlpp::null) {
 			mysqlpp::Connection::thread_end();
 			return double(row[0]);
 		}
@@ -137,18 +136,11 @@ void	ressourceClient::collect() {
 					} else {
 						query << "insert into res_events (host_id, res_id, start_time, event_type, property, current_value, oper, value) values (" << host_id << ", " << res_id << ", " << line["timestamp"] << ", " << e->event_type << ", '" << e->property << "', " <<  line[e->property] << ", '" << e->oper << "', " << e->value << ")";
 					}
-					try {
-					if (! query.exec()) {
-						std::cerr << "Failed to " << query << std::endl;
-						std::cerr << "\t\t" << query.error() << std::endl;
-					}
-					} catch(const mysqlpp::BadQuery& er) {
-						std::cerr << "Query error: " << er.what() << std::endl;
-					}
+					myqExec(query, "Update an event")
 
 					if (found == 0) {
 						current_events[query.insert_id()] = std::make_shared<res_event>(*e);
-						std::cout << "adding the event to the known event " << query.insert_id() << " -> " << current_events[query.insert_id()]->value << "\n";
+						/* std::cout << "adding the event to the known event " << query.insert_id() << " -> " << current_events[query.insert_id()]->value << "\n";*/
 					}
 				}
 			}
@@ -172,37 +164,30 @@ void	ressourceClient::collect() {
 						break;
 				}
 				if (trig) {
-					//std::cout << "triggering an end event\n";
 					mysqlpp::Query query = db->query();
 					query << "update res_events set end_time=" << line["timestamp"] << " where id=" << id;
-					try {
-					if (! query.exec()) {
-						std::cerr << "Failed to " << query << std::endl;
-						std::cerr << "\t\t" << query.error() << std::endl;
-					}
-					} catch(const mysqlpp::BadQuery& er) {
-						std::cerr << "Query error: " << er.what() << std::endl;
-					}
+					myqExec(query, "Update an event")
 					current_events.erase(id);
-				} //else { std::cout << line[e->property].asDouble() << " - " << e->value << "\n"; }
-			} else { std::cout << "Woops\n"; }
+				}
+			}
 		}
 
 		// insert the value
 		mysqlpp::Query query = db->query();
 		query << baseInsert;
-		for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
+		for (Json::Value::iterator j = def->begin();j!=def->end();j++)
 			query << ", " << line[j.key().asString()];
+		query << ") ON DUPLICATE KEY UPDATE ";
+		bool first=true;
+		for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
+			if(j.key().asString()=="timestamp") continue;
+			if(!first)
+				query << ", ";
+			first=false;
+			query << j.key().asString() << "=" << line[j.key().asString()];
 		}
-		query << ")";
-		try {
-		if (! query.exec()) {
-			std::cerr << "Failed to " << query << std::endl;
-			std::cerr << "\t\t" << query.error() << std::endl;
-		}
-		} catch(const mysqlpp::BadQuery& er) {
-			std::cerr << "Query error: " << er.what() << std::endl;
-		}
+
+		myqExec(query, "Insert a value")
 	}
 	mysqlpp::Connection::thread_end();
 }

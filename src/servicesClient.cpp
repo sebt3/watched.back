@@ -70,15 +70,7 @@ void	servicesClient::collect() {
 					"',pid=0,status='"+(*j)["status"].asString()+"',timestamp="+std::to_string(fp_ms.count());
 			}
 			mysqlpp::Query q = db->query(querystr);
-			try {
-			if (! q.exec()) {
-				std::cerr << "Failed to insert process" << std::endl;
-				std::cerr << "\t\t" << q.error() << std::endl;
-			}
-			} catch(const mysqlpp::BadQuery& er) {
-				std::cerr << "Query error: " << er.what() << std::endl;
-				std::cerr << "Query: " << q.str() << std::endl;
-			}
+			myqExec(q, "Failed to insert process")
 		}
 
 		// adding sockets
@@ -93,28 +85,14 @@ void	servicesClient::collect() {
 				",'"+(*j)["name"].asString()+"','"+(*j)["status"].asString()+
 				"',"+std::to_string(fp_ms.count())+") ON DUPLICATE KEY UPDATE status='"+(*j)["status"].asString()+
 				"',timestamp="+std::to_string(fp_ms.count()));
-			try {
-			if (! q.exec()) {
-				std::cerr << "Failed to insert socket" << std::endl;
-				std::cerr << "\t\t" << q.error() << std::endl;
-			}
-			} catch(const mysqlpp::BadQuery& er) {
-				std::cerr << "Query error: " << er.what() << std::endl;
-			}
+			myqExec(q, "Failed to insert socket")
 		}
 		
 		// updating status
 		mysqlpp::Query p = db->query(
 			"insert into serviceHistory(serv_id,timestamp,failed,missing,ok) values ("+std::to_string(serv_id)+	","+std::to_string(fp_ms.count())+","+std::to_string(failed)+",0,"+std::to_string(ok)+") ON DUPLICATE KEY UPDATE failed="+std::to_string(failed)+",ok="+std::to_string(ok)
 		);
-		try {
-		if (! p.exec()) {
-			std::cerr << "Failed to insert history" << std::endl;
-			std::cerr << "\t\t" << p.error() << std::endl;
-		}
-		} catch(const mysqlpp::BadQuery& er) {
-			std::cerr << "Query error: " << er.what() << std::endl;
-		}
+		myqExec(p, "Failed to insert history")
 	}
 
 	// update history for missing service on known hosts
@@ -122,14 +100,7 @@ void	servicesClient::collect() {
 		mysqlpp::Query p = db->query(
 			"insert into serviceHistory select s.id as serv_id, "+std::to_string(fp_ms.count())+" as timestamp, 0 as failed, ifnull(p.cnt,0)+ifnull(o.cnt,0) as missing, 0 as ok from services s left join (select serv_id, count(*) as cnt from serviceProcess group by serv_id) p on s.id=p.serv_id left join (select serv_id, count(*) as cnt from serviceSockets group by serv_id) o on s.id=o.serv_id where s.id not in (select serv_id from serviceHistory where timestamp>="+std::to_string(fp_ms.count())+") and host_id="+std::to_string(*i)
 		);
-		try {
-		if (! p.exec()) {
-			std::cerr << "Failed to insert history" << std::endl;
-			std::cerr << "\t\t" << p.error() << std::endl;
-		}
-		} catch(const mysqlpp::BadQuery& er) {
-			std::cerr << "Query error: " << er.what() << std::endl;
-		}
+		myqExec(p, "Failed to insert history")
 	}
 
 	mysqlpp::Connection::thread_end();

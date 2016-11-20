@@ -77,31 +77,19 @@ void	statAggregator::init(){
 				if(!haveAM) {
 					create_am += "from "+tbl+" where floor(timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" group by host_id,res_id, floor(timestamp/60000)*60000.0000";
 					mysqlpp::Query qam = db->query(create_am);
-					try {
-					if (! qam.execute()) {
-						std::cerr << "Failed to " << create_am << std::endl;
-					}
-					} catch(const mysqlpp::BadQuery& er) {
-						std::cerr << "Query error: " << er.what() << std::endl;
-						std::cerr << "Query: " << create_am << std::endl;
-					}
+					myqExec(qam, "Failed to create aggregate AM")
 
 					mysqlpp::Query qama = db->query("alter table am$"+tbl+" add constraint primary key (host_id, res_id, timestamp)");
-					if (! qama.execute()) {
-						std::cerr << "Failed to alter table am$"+tbl+" add constraint primary key (host_id, res_id, timestamp)" << std::endl;
-					}
+					myqExec(qama, "Failed to alter aggregate AM")
 				}
 				if(!haveAH) {
 					create_ah += "from am$"+tbl+" where floor(timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" group by host_id,res_id, floor(timestamp/3600000)*3600000.0000";
 
 					mysqlpp::Query qah = db->query(create_ah);
-					if (! qah.execute()) {
-						std::cerr << "Failed to " << create_ah << std::endl;
-					}
+					myqExec(qah, "Failed to create aggregate AH")
+
 					mysqlpp::Query qaha = db->query("alter table ah$"+tbl+" add constraint primary key (host_id, res_id, timestamp)");
-					if (! qaha.execute()) {
-						std::cerr << "Failed to alter table ah$"+tbl+" add constraint primary key (host_id, res_id, timestamp)" << std::endl;
-					}
+					myqExec(qaha, "Failed to alter aggregate AH")
 				}
 			}
 
@@ -126,48 +114,18 @@ void	statAggregator::startThread() {
 				//std::cout << "Aggregating "+i->first << std::endl;
 				mysqlpp::Query query = db->query();
 				query << base_am[i->first];
-				try {
-					query.execute();
-				} catch(const mysqlpp::BadQuery& er) {
-					std::cerr << "===================================================================================" << std::endl;
-					std::cerr << base_am[i->first] << std::endl;
-					std::cerr << "Query error: " << er.what() << std::endl;
-				}
+				myqExec(query, "Failed to insert aggregate AM")
 				query << base_ah[i->first];
-				try {
-					query.execute();
-				} catch(const mysqlpp::BadQuery& er) {
-					std::cerr << "===================================================================================" << std::endl;
-					std::cerr << base_ah[i->first] << std::endl;
-					std::cerr << "Query error: " << er.what() << std::endl;
-				}
+				myqExec(query, "Failed to insert aggregate AH")
 				q="delete from "+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["retention"].asString()+")*1000*"+std::to_string(sec2day);
 				query <<q;
-				try {
-					query.execute();
-				} catch(const mysqlpp::BadQuery& er) {
-					std::cerr << "===================================================================================" << std::endl;
-					std::cerr << q << std::endl;
-					std::cerr << "Query error: " << er.what() << std::endl;
-				}
+				myqExec(query, "Failed to purge raw data")
 				q="delete from am$"+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["am_retention"].asString()+")*1000*"+std::to_string(sec2day);
 				query <<q;
-				try {
-					query.execute();
-				} catch(const mysqlpp::BadQuery& er) {
-					std::cerr << "===================================================================================" << std::endl;
-					std::cerr << q << std::endl;
-					std::cerr << "Query error: " << er.what() << std::endl;
-				}
+				myqExec(query, "Failed to purge aggregate AM")
 				q="delete from ah$"+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["ah_retention"].asString()+")*1000*"+std::to_string(sec2day);
 				query <<q;
-				try {
-					query.execute();
-				} catch(const mysqlpp::BadQuery& er) {
-					std::cerr << "===================================================================================" << std::endl;
-					std::cerr << q << std::endl;
-					std::cerr << "Query error: " << er.what() << std::endl;
-				}
+				myqExec(query, "Failed to purge aggregate AH")
 			}
 			mysqlpp::Connection::thread_end();
 			std::this_thread::sleep_for(std::chrono::seconds((*cfg)["m_delay"].asInt()*60));

@@ -164,3 +164,16 @@ private:
 	std::shared_ptr<statAggregator>				aggreg;
 };
 }
+
+#define myqExec(q, msg)							\
+	try {								\
+	if (! q.exec()) {						\
+		std::cerr << "Error:\t\t" << msg << std::endl;		\
+		std::cerr << "Query error:\t" << q.error() << std::endl;\
+		std::cerr << "Query string:\t" << q.str() << std::endl;	\
+	}								\
+	} catch(const mysqlpp::BadQuery& er) {				\
+		std::cerr << "Error: ======== " << msg << " ==========================================" << std::endl;		\
+		std::cerr << "Query error:\t" << er.what() << std::endl;\
+		std::cerr << "Query string:\t" << q.str() << std::endl;	\
+	}
