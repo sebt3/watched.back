@@ -10,10 +10,8 @@ int main(int argc, char *argv[]) {
 	std::string cfgfile			= WATCHED_CONFIG;
 	if (argc>1) cfgfile			= argv[1];
 	std::shared_ptr<Config>		cfg	= std::make_shared<Config>(cfgfile);
-	Json::Value*			dbCfg	= cfg->getDB();
-
-	std::shared_ptr<dbPool>		db	= std::make_shared<dbPool>(dbCfg);
-	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db);
+	std::shared_ptr<dbPool>		db	= std::make_shared<dbPool>(cfg->getDB());
+	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db, cfg->getBackend());
 	cfg->save();
 	ac->init(cfg->getAggregate());
 	cfg->save();

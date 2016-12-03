@@ -1,12 +1,19 @@
 #pragma once
 
-#include "common.h"
-
 #include <mysql++/mysql++.h>
 
 /*#include <pistache/net.h>
 #include <pistache/http.h>
 #include <pistache/client.h>*/
+
+#include <json/json.h>
+
+#include <map>
+#include <string>
+#include <thread>
+
+#include "client_http.hpp"
+#include "client_https.hpp"
 
 extern const std::string SERVER_HEAD;
 extern const std::string APPS_NAME;
@@ -14,6 +21,46 @@ extern const std::string APPS_DESC;
 
 namespace watcheD {
 
+/*********************************
+ * Http client
+ */
+typedef SimpleWeb::Client<SimpleWeb::HTTP> SWHttpClient;
+typedef SimpleWeb::Client<SimpleWeb::HTTPS> SWHttpsClient;
+
+class HttpClient {
+public:
+	HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg);
+	std::string request(std::string p_opt, std::string p_path);
+	std::string baseURL() { return base_url; }
+private:
+	bool use_ssl;
+	std::string base_url;
+	std::shared_ptr<SWHttpClient>  http;
+	std::shared_ptr<SWHttpsClient> https;
+	Json::Value* cfg;
+};
+
+/*********************************
+ * Config
+ */
+class Config {
+public:
+	Config(std::string p_fname);
+	void save();
+	//Json::Value* 	getServer() { return &(data["server"]); }
+	Json::Value* 	getDB();
+	Json::Value* 	getCentral();
+	Json::Value* 	getBackend() { return &(data["backend"]); }
+	Json::Value* 	getAggregate();
+
+private:
+	Json::Value	data;
+	std::string	fname;
+};
+
+/*********************************
+ * dbPool
+ */
 class dbPool : public mysqlpp::ConnectionPool {
 public:
 	dbPool(Json::Value* p_cfg) :cfg(p_cfg), usedCount(0) { }
@@ -41,7 +88,9 @@ private:
 
 };
 	
-	
+/*********************************
+ * dbTools
+ */
 class dbTools {
 public:
 	dbTools(std::shared_ptr<dbPool>	p_db) : dbp(p_db) { }
@@ -111,7 +160,7 @@ private:
  */
 class agentClient : public dbTools {
 public:
-	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db);
+	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, Json::Value* p_cfg);
 	~agentClient();
 	void	init();
 	void	updateApi();
@@ -131,6 +180,7 @@ private:
 	uint32_t			pool_freq;
 	std::shared_ptr<servicesClient>	services;
 	std::vector< std::shared_ptr<ressourceClient> >		ressources;
+	Json::Value* 			back_cfg;
 };
 
 /*********************************
@@ -155,13 +205,14 @@ private:
  */
 class agentManager : public dbTools {
 public:
-	agentManager(std::shared_ptr<dbPool> p_db) : dbTools(p_db) { }
+	agentManager(std::shared_ptr<dbPool> p_db, Json::Value* p_cfg) : dbTools(p_db), back_cfg(p_cfg) { }
 	void	init(Json::Value* p_aggregCfg);
 	void	startThreads();
 	void	updateAgents();
 private:
 	std::map<uint32_t, std::shared_ptr<agentClient> >	agents;
 	std::shared_ptr<statAggregator>				aggreg;
+	Json::Value* 						back_cfg;
 };
 }
 

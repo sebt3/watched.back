@@ -1,10 +1,44 @@
-#include "common.h"
+#include "central.h"
+#include "config.h"
 
 #include <list>
 #include <fstream>
 
 using namespace std;
 namespace watcheD {
+
+HttpClient::HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg): use_ssl(false), base_url(p_baseurl), cfg(p_cfg) {
+	struct stat buffer;
+	std::string sslkey	= (*cfg)["SSL_key"].asString();
+	std::string sslcert	= (*cfg)["SSL_cert"].asString();
+	std::string sslvrf	= (*cfg)["SSL_verify"].asString();
+	use_ssl = (	(stat (sslcert.c_str(), &buffer) == 0) && // check if files exist
+			(stat (sslvrf.c_str(), &buffer) == 0) && 
+			(stat (sslkey.c_str(), &buffer) == 0) );
+	if (p_use_ssl && !use_ssl)
+		std::cerr << "Requiered certificate files not found, trying http instead\n";
+	else if (!p_use_ssl)
+		use_ssl= false;
+	if (use_ssl) {
+		https = std::make_shared<SWHttpsClient>(base_url,true,sslcert,sslkey,sslvrf); 
+	} else {
+		http = std::make_shared<SWHttpClient>(base_url);
+	}
+}
+
+std::string HttpClient::request(std::string p_opt, std::string p_path) {
+	std::stringstream ss;
+	if (use_ssl) {
+		std::shared_ptr<SWHttpsClient::Response> resp;
+		resp = https->request(p_opt, p_path);
+		ss << resp->content.rdbuf();
+	} else {
+		std::shared_ptr<SWHttpClient::Response> resp;
+		resp = http->request(p_opt, p_path);
+		ss << resp->content.rdbuf();
+	}
+	return ss.str();
+}
 
 Config::Config(std::string p_fname) : fname(p_fname) {
 	// reading the file
@@ -15,20 +49,33 @@ Config::Config(std::string p_fname) : fname(p_fname) {
 	}
 
 	// Server configuration
-	if (! data.isMember("server") || ! data["server"].isMember("thread")) {
-		data["server"]["threads"] = 8;
-		data["server"]["threads"].setComment(std::string("/*\t\tNumber of concurrent threads use to reply on network interface */"), Json::commentAfterOnSameLine);
+	//if (! data.isMember("server") || ! data["server"].isMember("thread")) {
+	//	data["server"]["threads"] = 8;
+	//	data["server"]["threads"].setComment(std::string("/*\t\tNumber of concurrent threads use to reply on network interface */"), Json::commentAfterOnSameLine);
+	//}
+	//if (! data["server"].isMember("host")) {
+	//	data["server"]["host"] = "";
+	//	data["server"]["host"].setComment(std::string("/*\t\tHost string to listen on (default: all interfaces) */"), Json::commentAfterOnSameLine);
+	//}
+	//if (! data["server"].isMember("port")) {
+	//	data["server"]["port"] = 9080;
+	//	data["server"]["port"].setComment(std::string("/*\t\tTCP port number */"), Json::commentAfterOnSameLine);
+	//}
+	//if (! data["server"].isMember("collectors_dir")) {
+	//	data["server"]["collectors_dir"] = "plugins";
+	//}
+	// Backend configuration
+	if (! data.isMember("backend") || ! data["backend"].isMember("SSL_cert")) {
+		data["backend"]["SSL_cert"] = WATCHED_SSL_CERT;
+		data["backend"]["SSL_cert"].setComment(std::string("/*\t\tSSL certificate file for the backend */"), Json::commentAfterOnSameLine);
 	}
-	if (! data["server"].isMember("host")) {
-		data["server"]["host"] = "";
-		data["server"]["host"].setComment(std::string("/*\t\tHost string to listen on (default: all interfaces) */"), Json::commentAfterOnSameLine);
+	if (! data["backend"].isMember("SSL_key")) {
+		data["backend"]["SSL_key"] = WATCHED_SSL_KEY;
+		data["backend"]["SSL_key"].setComment(std::string("/*\t\tSSL backend private key file */"), Json::commentAfterOnSameLine);
 	}
-	if (! data["server"].isMember("port")) {
-		data["server"]["port"] = 9080;
-		data["server"]["port"].setComment(std::string("/*\t\tTCP port number */"), Json::commentAfterOnSameLine);
-	}
-	if (! data["server"].isMember("collectors_dir")) {
-		data["server"]["collectors_dir"] = "plugins";
+	if (! data["backend"].isMember("SSL_verify")) {
+		data["backend"]["SSL_verify"] = WATCHED_SSL_VRF;
+		data["backend"]["SSL_verify"].setComment(std::string("/*\t\tSSL certificate file containing the agents keychain */"), Json::commentAfterOnSameLine);
 	}
 }
 
@@ -51,7 +98,7 @@ Json::Value* 	Config::getCentral() {
 	Json::Value obj_value(Json::objectValue);
 	if(! data.isMember("central")) {
 		data["central"] = obj_value;
-		data["central"].setComment(std::string("/*\tCentral server speccific configuration */"), Json::commentBefore);
+		data["central"].setComment(std::string("/*\tCentral server specific configuration */"), Json::commentBefore);
 	}
 	return &(data["central"]);
 }

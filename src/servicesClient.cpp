@@ -11,7 +11,7 @@ void	servicesClient::collect() {
 
 	// 1st: get the data from the client
 	Json::Value data;
-	std::shared_ptr<HttpClient::Response> resp;
+	std::string resp;
 	std::stringstream ss;
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
 	
@@ -26,7 +26,7 @@ void	servicesClient::collect() {
 			return;
 		}
 	}
-	ss << resp->content.rdbuf();
+	ss << resp;
 	try {
 		ss >> data;
 	} catch(const Json::RuntimeError &er) {
@@ -100,7 +100,7 @@ void	servicesClient::collect() {
 		mysqlpp::Query p = db->query(
 			"insert into serviceHistory select s.id as serv_id, "+std::to_string(fp_ms.count())+" as timestamp, 0 as failed, ifnull(p.cnt,0)+ifnull(o.cnt,0) as missing, 0 as ok from services s left join (select serv_id, count(*) as cnt from serviceProcess group by serv_id) p on s.id=p.serv_id left join (select serv_id, count(*) as cnt from serviceSockets group by serv_id) o on s.id=o.serv_id where s.id not in (select serv_id from serviceHistory where timestamp>="+std::to_string(fp_ms.count())+") and host_id="+std::to_string(*i)
 		);
-		myqExec(p, "Failed to insert history")
+		myqExec(p, "Failed to insert missing history")
 	}
 
 	mysqlpp::Connection::thread_end();

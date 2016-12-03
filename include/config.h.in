@@ -1,2 +1,5 @@
 #pragma once
 const std::string WATCHED_CONFIG="@CMAKE_INSTALL_SYSCONFDIR@/watched/back.config.json";
+const std::string WATCHED_SSL_KEY="@CMAKE_INSTALL_SYSCONFDIR@/watched/ssl/backend.key";
+const std::string WATCHED_SSL_CERT="@CMAKE_INSTALL_SYSCONFDIR@/watched/ssl/backend.pem";
+const std::string WATCHED_SSL_VRF="@CMAKE_INSTALL_SYSCONFDIR@/watched/ssl/backend.verify.pem";

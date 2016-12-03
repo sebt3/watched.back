@@ -4,6 +4,7 @@ create table agents (
 	port 		int(32) unsigned not null,
 	pool_freq 	int(32) unsigned default 300,
 	central_id 	int(32) not null default 1,
+	use_ssl		bool default 0,
 	constraint agent_pk primary key (id),
 	constraint unique index agent_u (host, port)
 );

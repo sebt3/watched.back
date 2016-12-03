@@ -29,7 +29,7 @@ void	agentManager::updateAgents() {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			mysqlpp::Row row = *it;
 			if (agents.find(row[0]) == agents.end()) { // do not start exiting agent
-				agents[row[0]] = std::make_shared<agentClient>(row[0], dbp);
+				agents[row[0]] = std::make_shared<agentClient>(row[0], dbp, back_cfg);
 				agents[row[0]]->init();
 			}
 		}

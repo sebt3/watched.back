@@ -81,7 +81,7 @@ void	ressourceClient::collect() {
 
 	// Get the lastest data from the agent
 	Json::Value data;
-	std::shared_ptr<HttpClient::Response> resp;
+	std::string resp;
 	std::stringstream ss;
 	try {
 		resp = client->request("GET", url);
@@ -93,7 +93,7 @@ void	ressourceClient::collect() {
 			return;
 		}
 	}
-	ss << resp->content.rdbuf();
+	ss << resp;
 	try {
 		ss >> data;
 	} catch(const Json::RuntimeError &er) {

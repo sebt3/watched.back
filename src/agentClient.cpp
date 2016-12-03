@@ -6,7 +6,7 @@
 
 namespace watcheD {
 
-agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db) : dbTools(p_db), ready(false), active(false), id(p_id) {
+agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, Json::Value* p_cfg) : dbTools(p_db), ready(false), active(false), id(p_id), back_cfg(p_cfg) {
 }
 
 agentClient::~agentClient() {
@@ -31,18 +31,14 @@ void agentClient::createRessources() {
 		std::string tbl	= ref.substr(ref.rfind("/")+1);
 		if (! haveRessource(res)) {
 			mysqlpp::Query query = db->query("insert into ressources(name, type) values('"+res+"','"+tbl+"')");
-			if (! query.execute()) {
-				std::cerr << "Failed to insert ressource: " << res << std::endl;
-			}
+			myqExec(query, "Failed to insert ressource")
 		}
 		uint32_t resid = getRessourceId(res);
 		uint32_t hostid = getHost((*i)["x-host"].asString());
 		if (resid==0) continue;
 
 		mysqlpp::Query q = db->query("insert into host_ressources(host_id,res_id) values ("+std::to_string(hostid)+","+std::to_string(resid)+") ON DUPLICATE KEY UPDATE res_id=res_id");
-		if (! q.execute()) {
-			std::cerr << "Failed to insert host_ressources: " << std::to_string(hostid) << ", " << res << std::endl;
-		}
+		myqExec(q, "Failed to insert host_resource")
 
 		bool found=false;
 		for (std::vector< std::shared_ptr<ressourceClient> >::iterator j=ressources.begin();j!=ressources.end();j++) {
@@ -89,9 +85,7 @@ void agentClient::createTables() {
 			ss << "\tconstraint " << i.key().asString() << "_pk primary key (host_id,res_id,timestamp)" << std::endl;
 			ss << ")" << std::endl;
 			mysqlpp::Query query = db->query(ss.str());
-			if (! query.execute()) {
-				std::cerr << "Failed to " << ss.str() << std::endl;
-			}
+			myqExec(query, "Failed to create data table")
 		} else {
 			// check for missing columns and add them as needed
 			for (Json::Value::iterator j = (*i)["properties"].begin();j!=(*i)["properties"].end();j++) {
@@ -107,9 +101,7 @@ void agentClient::createTables() {
 						continue;
 					}
 					mysqlpp::Query query = db->query(ss.str());
-					if (! query.execute()) {
-						std::cerr << "Failed to " << ss.str() << std::endl;
-					}
+					myqExec(query, "Failed to add a column to a data table")
 				}
 			}
 			
@@ -124,7 +116,7 @@ void agentClient::updateApi() {
 		init();
 		return; // API update will occur during init
 	}
-	std::shared_ptr<HttpClient::Response> resp;
+	std::string resp;
 	std::stringstream ss;
 	try {
 		resp = client->request("GET", "/api/swagger.json");
@@ -132,7 +124,7 @@ void agentClient::updateApi() {
 		std::cout << "Failed to connect to the agent "<< id <<"("<< baseurl << "), is it down ? \n";
 		return;
 	}
-	ss << resp->content.rdbuf();
+	ss << resp;
 	try {
 		ss >> api;
 	} catch(const Json::RuntimeError &er) {
@@ -146,12 +138,13 @@ void agentClient::updateApi() {
 
 void agentClient::init() {
 	if (ready) return;
+	bool use_ssl = false;
 	// 1st build the base URL
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
 	mysqlpp::Query query = db->query();
-	query << "select host, port, pool_freq from agents where id=" << id;
+	query << "select host, port, pool_freq, use_ssl from agents where id=" << id;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		if (row[0] == "localhost") {
@@ -162,6 +155,8 @@ void agentClient::init() {
 		}
 		baseurl.append(row[1].c_str());
 		pool_freq = row[2];
+		if (atoi(row[3].c_str())==1)
+			use_ssl=true;
 	}
 	else {
 		std::cerr << "Cannot look for agent id=" <<id << std::endl;
@@ -169,7 +164,7 @@ void agentClient::init() {
 		return;
 	}
 	mysqlpp::Connection::thread_end();
-	client = std::make_shared<HttpClient>(baseurl);
+	client = std::make_shared<HttpClient>(baseurl, use_ssl, back_cfg);
 
 	services = std::make_shared<servicesClient>(id, dbp, client);
 	services->init();

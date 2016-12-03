@@ -95,9 +95,7 @@ uint32_t	dbTools::getHost(std::string p_host_name) {
 	mysqlpp::Query query = db->query();
 	if ( !haveHost(p_host_name) ) {
 		mysqlpp::Query q = db->query("insert into hosts(name) values('"+p_host_name+"')");
-		if (! q.execute()) {
-				std::cerr << "Failed to insert hosts: " << p_host_name << std::endl;
-			}
+		myqExec(q, "Failed to insert host")
 	}
 	query << "select id from hosts where name=" << mysqlpp::quote << p_host_name;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
@@ -131,9 +129,7 @@ uint32_t	dbTools::getService(uint32_t p_host_id, std::string p_service) {
 	mysqlpp::Query query = db->query();
 	if ( !haveService(p_host_id, p_service) ) {
 		mysqlpp::Query q = db->query("insert into services(host_id,name) values("+std::to_string(p_host_id)+",'"+p_service+"')");
-		if (! q.execute()) {
-				std::cerr << "Failed to insert service: " << p_service << std::endl;
-			}
+		myqExec(q, "Failed to insert service")
 	}
 	query << "select id from services where host_id="+std::to_string(p_host_id)+" and name=" << mysqlpp::quote << p_service;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
