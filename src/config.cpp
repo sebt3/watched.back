@@ -30,6 +30,11 @@ std::string HttpClient::request(std::string p_opt, std::string p_path) {
 	std::stringstream ss;
 	if (use_ssl) {
 		std::shared_ptr<SWHttpsClient::Response> resp;
+		std::string sslkey	= (*cfg)["SSL_key"].asString();
+		std::string sslcert	= (*cfg)["SSL_cert"].asString();
+		std::string sslvrf	= (*cfg)["SSL_verify"].asString();
+		// previous https client is deleted here...
+		https = std::make_shared<SWHttpsClient>(base_url,true,sslcert,sslkey,sslvrf); 
 		resp = https->request(p_opt, p_path);
 		ss << resp->content.rdbuf();
 	} else {
