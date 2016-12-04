@@ -8,31 +8,11 @@ void	servicesClient::init() {
 }
 
 void	servicesClient::collect() {
-
 	// 1st: get the data from the client
 	Json::Value data;
-	std::string resp;
-	std::stringstream ss;
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
-	
-	try {
-		resp = client->request("GET", "/service/all/status");
-	} catch (std::exception &e) {
-		// retrying to cope with "read_until: End of file" errors
-		try {
-			resp = client->request("GET", "/service/all/status");
-		} catch (std::exception &e) {
-			std::cerr << "Failed to get /service/all/status after a retry:" << e.what() << std::endl;
-			return;
-		}
-	}
-	ss << resp;
-	try {
-		ss >> data;
-	} catch(const Json::RuntimeError &er) {
-		std::cerr << "Json parse failed for url : /service/all/status\n" ;
-		return;
-	}
+
+	if(!client->getJSON("/service/all/status", data)) return;
 	
 	// then insert into database
 	mysqlpp::Connection::thread_start();

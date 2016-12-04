@@ -31,6 +31,7 @@ class HttpClient {
 public:
 	HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg);
 	std::string request(std::string p_opt, std::string p_path);
+	bool getJSON(std::string p_path, Json::Value &result);
 	std::string baseURL() { return base_url; }
 private:
 	bool use_ssl;

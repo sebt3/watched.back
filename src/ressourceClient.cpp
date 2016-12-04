@@ -81,25 +81,7 @@ void	ressourceClient::collect() {
 
 	// Get the lastest data from the agent
 	Json::Value data;
-	std::string resp;
-	std::stringstream ss;
-	try {
-		resp = client->request("GET", url);
-	} catch (std::exception &e) {
-		try {
-			resp = client->request("GET", url);
-		} catch (std::exception &e) {
-			std::cerr << "Failed to get "+url+" after a retry:" << e.what() << std::endl;
-			return;
-		}
-	}
-	ss << resp;
-	try {
-		ss >> data;
-	} catch(const Json::RuntimeError &er) {
-		std::cerr << "Json parse failed for url : " << url << "\n" ;
-		return;
-	}
+	if(!client->getJSON(url, data)) return;
 
 	// Load that data into database
 	mysqlpp::Connection::thread_start();

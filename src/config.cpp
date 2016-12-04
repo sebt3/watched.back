@@ -33,8 +33,9 @@ std::string HttpClient::request(std::string p_opt, std::string p_path) {
 		std::string sslkey	= (*cfg)["SSL_key"].asString();
 		std::string sslcert	= (*cfg)["SSL_cert"].asString();
 		std::string sslvrf	= (*cfg)["SSL_verify"].asString();
+		bool sslvn		= (*cfg)["SSL_verify_name"].asBool();
 		// previous https client is deleted here...
-		https = std::make_shared<SWHttpsClient>(base_url,true,sslcert,sslkey,sslvrf); 
+		https = std::make_shared<SWHttpsClient>(base_url,sslvn,sslcert,sslkey,sslvrf); 
 		resp = https->request(p_opt, p_path);
 		ss << resp->content.rdbuf();
 	} else {
@@ -43,6 +44,29 @@ std::string HttpClient::request(std::string p_opt, std::string p_path) {
 		ss << resp->content.rdbuf();
 	}
 	return ss.str();
+}
+bool HttpClient::getJSON(std::string p_path, Json::Value &result) {
+	std::string resp;
+	std::stringstream ss;
+	try {
+		resp = request("GET", p_path);
+	} catch (std::exception &e) {
+		// retrying to cope with "read_until: End of file" errors
+		try {
+			resp = request("GET", p_path);
+		} catch (std::exception &e) {
+			std::cerr << "Failed to get "<< base_url << p_path << " after a retry:" << e.what() << std::endl;
+			return false;
+		}
+	}
+	ss << resp;
+	try {
+		ss >> result;
+	} catch(const Json::RuntimeError &er) {
+		std::cerr << "Json parse failed for url : " << base_url << p_path << std::endl;
+		return false;
+	}
+	return true;
 }
 
 Config::Config(std::string p_fname) : fname(p_fname) {
@@ -81,6 +105,14 @@ Config::Config(std::string p_fname) : fname(p_fname) {
 	if (! data["backend"].isMember("SSL_verify")) {
 		data["backend"]["SSL_verify"] = WATCHED_SSL_VRF;
 		data["backend"]["SSL_verify"].setComment(std::string("/*\t\tSSL certificate file containing the agents keychain */"), Json::commentAfterOnSameLine);
+	}
+	if (! data["backend"].isMember("SSL_verify_name")) {
+		data["backend"]["SSL_verify_name"] = true;
+		data["backend"]["SSL_verify_name"].setComment(std::string("/*\t\tShould the agent name checked in the certificate */"), Json::commentAfterOnSameLine);
+	}
+	if (! data["backend"].isMember("central_id")) {
+		data["backend"]["central_id"] = -1;
+		data["backend"]["central_id"].setComment(std::string("/*\t\tSelect the agents to collect based on their central_id [default: all agents (-1)] */"), Json::commentAfterOnSameLine);
 	}
 }
 

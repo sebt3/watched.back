@@ -111,26 +111,11 @@ void agentClient::createTables() {
 }
 
 void agentClient::updateApi() {
-	// then query for its API
 	if (!ready) {
 		init();
 		return; // API update will occur during init
 	}
-	std::string resp;
-	std::stringstream ss;
-	try {
-		resp = client->request("GET", "/api/swagger.json");
-	} catch (std::exception &e) {
-		std::cout << "Failed to connect to the agent "<< id <<"("<< baseurl << "), is it down ? \n";
-		return;
-	}
-	ss << resp;
-	try {
-		ss >> api;
-	} catch(const Json::RuntimeError &er) {
-		std::cerr << "Main json parse failed for agent : " << baseurl << "\n" ;
-		return;
-	}
+	if(!client->getJSON("/api/swagger.json", api)) return;
 	createRessources();
 	createTables();
 	std::cout << "Agent "<< id <<"("<< baseurl << "), API knowledge updated\n";

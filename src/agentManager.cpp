@@ -24,7 +24,11 @@ void	agentManager::updateAgents() {
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
-	mysqlpp::Query query = db->query("select id from agents");
+	std::string qstr = "select id from agents";
+	int domains = (*back_cfg)["central_id"].asInt();
+	if (domains>0)
+		qstr = "select id from agents where central_id="+std::to_string(domains);
+	mysqlpp::Query query = db->query(qstr);
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			mysqlpp::Row row = *it;
