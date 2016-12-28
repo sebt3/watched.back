@@ -11,6 +11,9 @@
 #include <map>
 #include <string>
 #include <thread>
+#include <condition_variable>
+#include <mutex>
+#include <future>
 
 #include "client_http.hpp"
 #include "client_https.hpp"
@@ -21,6 +24,23 @@ extern const std::string APPS_DESC;
 
 namespace watcheD {
 
+class log {
+public:
+	log(Json::Value* p_cfg);
+	void write(uint16_t p_lvl, const std::string p_src, std::string p_message);
+	void write(std::string p_lvl, const std::string p_src, std::string p_message);
+	void error(const std::string p_src, std::string p_message);
+	void warning(const std::string p_src, std::string p_message);
+	void info(const std::string p_src, std::string p_message);
+	void notice(const std::string p_src, std::string p_message);
+	void debug(const std::string p_src, std::string p_message);
+private:
+	Json::Value*	cfg;
+	uint16_t	level;
+	static const std::vector<std::string> levels;
+	std::mutex	mutex;
+};
+
 /*********************************
  * Http client
  */
@@ -29,7 +49,7 @@ typedef SimpleWeb::Client<SimpleWeb::HTTPS> SWHttpsClient;
 
 class HttpClient {
 public:
-	HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg);
+	HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg, std::shared_ptr<log> p_l);
 	std::string request(std::string p_opt, std::string p_path);
 	bool getJSON(std::string p_path, Json::Value &result);
 	std::string baseURL() { return base_url; }
@@ -39,7 +59,9 @@ private:
 	std::shared_ptr<SWHttpClient>  http;
 	std::shared_ptr<SWHttpsClient> https;
 	Json::Value* cfg;
+	std::shared_ptr<log>	l;
 };
+
 
 /*********************************
  * Config
@@ -49,6 +71,7 @@ public:
 	Config(std::string p_fname);
 	void save();
 	//Json::Value* 	getServer() { return &(data["server"]); }
+	Json::Value* 	getLog();
 	Json::Value* 	getDB();
 	Json::Value* 	getCentral();
 	Json::Value* 	getBackend() { return &(data["backend"]); }
@@ -94,7 +117,7 @@ private:
  */
 class dbTools {
 public:
-	dbTools(std::shared_ptr<dbPool>	p_db) : dbp(p_db) { }
+	dbTools(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l) : dbp(p_db), l(p_l) { }
 protected:
 	bool		haveTable(std::string p_name);
 	bool		tableHasColumn(std::string p_name, std::string p_col);
@@ -105,6 +128,7 @@ protected:
 	bool		haveService(uint32_t p_host_id, std::string p_service);
 	uint32_t	getService(uint32_t p_host_id, std::string p_service);
 	std::shared_ptr<dbPool>	dbp;
+	std::shared_ptr<log>	l;
 };
 
 /*********************************
@@ -122,14 +146,16 @@ struct res_event {
 
 class ressourceClient : public dbTools {
 public:
-	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<HttpClient> p_client) : dbTools(p_db), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
+	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
 	void	init();
 	void	collect();
 	std::string	getBaseUrl() { return baseurl; }
+	void	setService() { isService = true; }
 
 private:
 	double  getSince();
 
+	bool			isService;
 	uint32_t		host_id;
 	uint32_t		res_id;
 	std::string		baseurl;
@@ -146,7 +172,7 @@ private:
  */
 class servicesClient : public dbTools {
 public:
-	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<HttpClient> p_client): dbTools(p_db), agt_id(p_agt_id), client(p_client) { }
+	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<HttpClient> p_client): dbTools(p_db, p_l), agt_id(p_agt_id), client(p_client) { }
 	void	init();
 	void	collect();
 private:
@@ -161,7 +187,7 @@ private:
  */
 class agentClient : public dbTools {
 public:
-	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, Json::Value* p_cfg);
+	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg);
 	~agentClient();
 	void	init();
 	void	updateApi();
@@ -189,7 +215,7 @@ private:
  */
 class statAggregator : public dbTools {
 public:
-	statAggregator(std::shared_ptr<dbPool>	p_db, Json::Value* p_aggregCfg);
+	statAggregator(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_aggregCfg);
 	void	init();
 	void	startThread();
 private:
@@ -206,7 +232,7 @@ private:
  */
 class agentManager : public dbTools {
 public:
-	agentManager(std::shared_ptr<dbPool> p_db, Json::Value* p_cfg) : dbTools(p_db), back_cfg(p_cfg) { }
+	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg) : dbTools(p_db, p_l), back_cfg(p_cfg) { }
 	void	init(Json::Value* p_aggregCfg);
 	void	startThreads();
 	void	updateAgents();
@@ -217,15 +243,15 @@ private:
 };
 }
 
-#define myqExec(q, msg)							\
-	try {								\
-	if (! q.exec()) {						\
-		std::cerr << "Error:\t\t" << msg << std::endl;		\
-		std::cerr << "Query error:\t" << q.error() << std::endl;\
-		std::cerr << "Query string:\t" << q.str() << std::endl;	\
-	}								\
-	} catch(const mysqlpp::BadQuery& er) {				\
-		std::cerr << "Error: ======== " << msg << " ==========================================" << std::endl;		\
-		std::cerr << "Query error:\t" << er.what() << std::endl;\
-		std::cerr << "Query string:\t" << q.str() << std::endl;	\
+#define myqExec(q, from, msg)			\
+	try {					\
+	if (! q.exec()) {			\
+		l->error(from,msg);		\
+		l->info(from,q.error());	\
+		l->notice(from,q.str());	\
+	}					\
+	} catch(const mysqlpp::BadQuery& er) {	\
+		l->error(from,msg);		\
+		l->info(from,q.error());	\
+		l->notice(from,q.str());	\
 	}

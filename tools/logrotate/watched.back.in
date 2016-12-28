@@ -1,0 +1,7 @@
+@CMAKE_INSTALL_LOCALSTATEDIR@/log/watched.back.log {
+        dayly
+        rotate 7
+        compress
+        delaycompress
+        missingok
+}

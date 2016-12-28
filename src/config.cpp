@@ -7,7 +7,7 @@
 using namespace std;
 namespace watcheD {
 
-HttpClient::HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg): use_ssl(false), base_url(p_baseurl), cfg(p_cfg) {
+HttpClient::HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg, std::shared_ptr<log> p_l): use_ssl(false), base_url(p_baseurl), cfg(p_cfg), l(p_l) {
 	struct stat buffer;
 	std::string sslkey	= (*cfg)["SSL_key"].asString();
 	std::string sslcert	= (*cfg)["SSL_cert"].asString();
@@ -16,7 +16,7 @@ HttpClient::HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg
 			(stat (sslvrf.c_str(), &buffer) == 0) && 
 			(stat (sslkey.c_str(), &buffer) == 0) );
 	if (p_use_ssl && !use_ssl)
-		std::cerr << "Requiered certificate files not found, trying http instead\n";
+		l->warning("HttpClient::HttpClient", "Requiered certificate files not found, trying http instead");
 	else if (!p_use_ssl)
 		use_ssl= false;
 	if (use_ssl) {
@@ -55,7 +55,7 @@ bool HttpClient::getJSON(std::string p_path, Json::Value &result) {
 		try {
 			resp = request("GET", p_path);
 		} catch (std::exception &e) {
-			std::cerr << "Failed to get "<< base_url << p_path << " after a retry:" << e.what() << std::endl;
+			l->warning("HttpClient::getJSON", "Failed to get "+base_url+p_path+" after a retry:"+e.what());
 			return false;
 		}
 	}
@@ -63,7 +63,7 @@ bool HttpClient::getJSON(std::string p_path, Json::Value &result) {
 	try {
 		ss >> result;
 	} catch(const Json::RuntimeError &er) {
-		std::cerr << "Json parse failed for url : " << base_url << p_path << std::endl;
+		l->warning("HttpClient::getJSON", "Json parse failed for url : "+base_url+p_path);
 		return false;
 	}
 	return true;
@@ -140,6 +140,15 @@ Json::Value* 	Config::getCentral() {
 	return &(data["central"]);
 }
 
+Json::Value* 	Config::getLog() {
+	Json::Value obj_value(Json::objectValue);
+	if(! data.isMember("log")) {
+		data["log"] = obj_value;
+		data["log"].setComment(std::string("/*\tThe backend logging configuration */"), Json::commentBefore);
+	}
+	return &(data["log"]);
+}
+
 Json::Value* 	Config::getDB() {
 	Json::Value obj_value(Json::objectValue);
 	if(! data.isMember("db")) {
@@ -151,15 +160,15 @@ Json::Value* 	Config::getDB() {
 		data["db"]["connection_string"].setComment(std::string("/*\tMySQL database connection string */"), Json::commentAfterOnSameLine);
 	}
 	if (!data["db"].isMember("database_name")) {
-		data["db"]["database_name"]		= "sebtest";
+		data["db"]["database_name"]		= "watcheddb";
 		data["db"]["database_name"].setComment(std::string("/*\t\tMySQL database name */"), Json::commentAfterOnSameLine);
 	}
 	if (!data["db"].isMember("login")) {
-		data["db"]["login"]			= "seb";
+		data["db"]["login"]			= "watched";
 		data["db"]["login"].setComment(std::string("/*\t\t\tMySQL login */"), Json::commentAfterOnSameLine);
 	}
 	if (!data["db"].isMember("password")) {
-		data["db"]["password"]		= "seb";
+		data["db"]["password"]		= "watched";
 		data["db"]["password"].setComment(std::string("/*\t\t\tMySQL password */"), Json::commentAfterOnSameLine);
 	}
 	if (!data["db"].isMember("pool_size")) {

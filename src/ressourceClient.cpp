@@ -9,20 +9,28 @@ namespace watcheD {
 
 void	ressourceClient::init() {
 	// define the base insert string
+	std::string id_name = "host_id";
+	std::string typed = "h$";
+	if (isService) {
+		typed   = "s$";
+		id_name = "serv_id";
+	}
 	std::stringstream insert;
-	insert << "insert into " << table << "(host_id, res_id";
+	insert << "insert into d$" << table << "(" << id_name << ", res_id";
 	for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
 		insert << ", " << j.key().asString();
 	}
 	insert << ") values (" << host_id << ", " << res_id;
 	baseInsert = insert.str();
 
+	if (isService)
+		return; //TODO: load events and factory from adjusted tables
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
+	if (!db) { l->error("ressourceClient::init", "Failed to get a connection from the pool!"); return; }
 	// load current events
 	mysqlpp::Query q1 = db->query();
-	q1 << "select id, event_type, property, oper, value from res_events where end_time is null and host_id=" << host_id << " and res_id=" << res_id;
+	q1 << "select id, event_type, property, oper, value from "+typed+"res_events where end_time is null and "+id_name+"=" << host_id << " and res_id=" << res_id;
 	if (mysqlpp::StoreQueryResult r1 = q1.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator i1= r1.begin(); i1 != r1.end(); ++i1) {
 			mysqlpp::Row row	= *i1;
@@ -37,8 +45,8 @@ void	ressourceClient::init() {
 
 	// load factory
 	mysqlpp::Query q2 = db->query();
-	q2 << "select event_type, property, oper, value from event_factory";
-	q2 << " where (host_id =" << host_id << " or host_id is null)";
+	q2 << "select event_type, property, oper, value from "+typed+"event_factory";
+	q2 << " where ("+id_name+"=" << host_id << " or "+id_name+" is null)";
 	q2 << "   and (res_id=" << res_id << " or res_id is null)";
 	q2 << "   and (res_type='" << table << "' or res_type is null)";
 	if (mysqlpp::StoreQueryResult r2 = q2.store()) {
@@ -56,11 +64,14 @@ void	ressourceClient::init() {
 }
 
 double  ressourceClient::getSince() {
+	std::string id_name = "host_id";
+	if (isService)
+		id_name = "serv_id";
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return -1; }
+	if (!db) { l->error("ressourceClient::getSince", "Failed to get a connection from the pool!"); return -1; }
 	mysqlpp::Query query = db->query();
-	query << "select max(timestamp) from "+table+" where host_id=" << host_id << " and res_id=" << res_id;
+	query << "select max(timestamp) from d$"+table+" where "+id_name+"=" << host_id << " and res_id=" << res_id;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		if (row[0]!=mysqlpp::null) {
@@ -74,6 +85,12 @@ double  ressourceClient::getSince() {
 
 void	ressourceClient::collect() {
 	std::string url = baseurl;
+	std::string id_name = "host_id";
+	std::string typed = "h$";
+	if (isService) {
+		typed   = "s$";
+		id_name = "serv_id";
+	}
 	// Get the last timestamp collected
 	double since = getSince();
 	if (since >0)
@@ -86,7 +103,7 @@ void	ressourceClient::collect() {
 	// Load that data into database
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
+	if (!db) { l->error("ressourceClient::collect", "Failed to get a connection from the pool!"); return; }
 	for (const Json::Value& line : data) {
 		// compare values to the factory
 		for (std::vector< std::shared_ptr<struct res_event> >::iterator it = event_factory.begin() ; it != event_factory.end(); ++it) {
@@ -112,13 +129,14 @@ void	ressourceClient::collect() {
 							found  = i->first;
 					}
 					mysqlpp::Query query = db->query();
+					// TODO: once the service ressource factory is on, support tables accordingly
 					if (found>0) {
 						// if the event already exist update
-						query << "update res_events set current_value=" << line[e->property] << " where id=" << found;
+						query << "update "+typed+"res_events set current_value=" << line[e->property] << " where id=" << found;
 					} else {
-						query << "insert into res_events (host_id, res_id, start_time, event_type, property, current_value, oper, value) values (" << host_id << ", " << res_id << ", " << line["timestamp"] << ", " << e->event_type << ", '" << e->property << "', " <<  line[e->property] << ", '" << e->oper << "', " << e->value << ")";
+						query << "insert into "+typed+"res_events ("+id_name+", res_id, start_time, event_type, property, current_value, oper, value) values (" << host_id << ", " << res_id << ", " << line["timestamp"] << ", " << e->event_type << ", '" << e->property << "', " <<  line[e->property] << ", '" << e->oper << "', " << e->value << ")";
 					}
-					myqExec(query, "Update an event")
+					myqExec(query, "ressourceClient::collect", "Update an event")
 
 					if (found == 0) {
 						current_events[query.insert_id()] = std::make_shared<res_event>(*e);
@@ -146,9 +164,10 @@ void	ressourceClient::collect() {
 						break;
 				}
 				if (trig) {
+					// TODO: once the service ressource factory is on, support tables accordingly
 					mysqlpp::Query query = db->query();
-					query << "update res_events set end_time=" << line["timestamp"] << " where id=" << id;
-					myqExec(query, "Update an event")
+					query << "update "+typed+"res_events set end_time=" << line["timestamp"] << " where id=" << id;
+					myqExec(query, "ressourceClient::collect", "Update an event")
 					current_events.erase(id);
 				}
 			}
@@ -169,7 +188,7 @@ void	ressourceClient::collect() {
 			query << j.key().asString() << "=" << line[j.key().asString()];
 		}
 
-		myqExec(query, "Insert a value")
+		myqExec(query, "ressourceClient::collect", "Insert a value")
 	}
 	mysqlpp::Connection::thread_end();
 }

@@ -6,7 +6,7 @@
 
 namespace watcheD {
 
-statAggregator::statAggregator(std::shared_ptr<dbPool>	p_db, Json::Value* p_aggregCfg) : dbTools(p_db), active(false), cfg(p_aggregCfg) {
+statAggregator::statAggregator(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_aggregCfg) : dbTools(p_db, p_l), active(false), cfg(p_aggregCfg) {
 	if(! cfg->isMember("m_delay")) {
 		(*cfg)["m_delay"] = 30;		// 30mns
 		(*cfg)["m_delay"].setComment(std::string("/*\t\tDelay before the data is aggregated in minutes */"), Json::commentAfterOnSameLine);
@@ -34,25 +34,28 @@ void	statAggregator::init(){
 	int h_delay = (*cfg)["h_delay"].asInt();
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
+	if (!db) { l->error("statAggregator::init", "Failed to get a connection from the pool!"); return; }
 
-	mysqlpp::Query query = db->query("select table_name from live_tables");
+	mysqlpp::Query query = db->query("select table_name from c$data_tables");
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			std::string tbl = (*it)[0].c_str();
+			std::string id_name = "host_id";
+			if (tableHasColumn("d$"+tbl, "serv_id"))
+				id_name = "serv_id";
 			std::string colm;
 			std::string colh;
 			bool haveAM		= haveTable("am$"+tbl);
 			bool haveAH		= haveTable("ah$"+tbl);
-			std::string create_am	= "create table am$"+tbl+" as select host_id, res_id, floor(timestamp/60000)*60000.0000 as timestamp ";
-			std::string create_ah	= "create table ah$"+tbl+" as select host_id, res_id, floor(timestamp/3600000)*3600000.0000 as timestamp ";
-			base_am[tbl]		= "insert into am$"+tbl+" select d.host_id, d.res_id, floor(d.timestamp/60000)*60000.0000 as timestamp ";
-			base_ah[tbl]		= "insert into ah$"+tbl+" select d.host_id, d.res_id, floor(d.timestamp/3600000)*3600000.0000 as timestamp ";
+			std::string create_am	= "create table am$"+tbl+" as select "+id_name+", res_id, floor(timestamp/60000)*60000.0000 as timestamp ";
+			std::string create_ah	= "create table ah$"+tbl+" as select "+id_name+", res_id, floor(timestamp/3600000)*3600000.0000 as timestamp ";
+			base_am[tbl]		= "insert into am$"+tbl+" select d."+id_name+", d.res_id, floor(d.timestamp/60000)*60000.0000 as timestamp ";
+			base_ah[tbl]		= "insert into ah$"+tbl+" select d."+id_name+", d.res_id, floor(d.timestamp/3600000)*3600000.0000 as timestamp ";
 			
 			mysqlpp::Query qcols = db->query();
 			
 			qcols 	<< "select col.column_name from information_schema.columns col where col.TABLE_SCHEMA=DATABASE() and col.table_name = '" << tbl 
-				<< "' and col.data_type in ('int', 'double') and column_name not in ('host_id', 'res_id', 'timestamp')";
+				<< "' and col.data_type in ('int', 'double') and column_name not in ('"+id_name+"', 'res_id', 'timestamp')";
 			if (mysqlpp::StoreQueryResult resc = qcols.store()) {
 				for (mysqlpp::StoreQueryResult::const_iterator itc= resc.begin(); itc != resc.end(); ++itc) {
 					std::string col = (*itc)[0].c_str();
@@ -71,25 +74,27 @@ void	statAggregator::init(){
 						// TODO: add the missing avg,min,max columns
 					}
 				}
-				base_am[tbl]+= "from "+tbl+" d, (select u.host_id, u.res_id, max(u.timestamp) as timestamp from (select x.host_id, x.res_id, max(x.timestamp) as timestamp from am$"+tbl+" x group by x.host_id, x.res_id union all select z.host_id, z.res_id, 0.0000 as timestamp from "+tbl+" z group by z.host_id, z.res_id) u group by u.host_id, u.res_id) y where floor(d.timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" and floor(d.timestamp/60000)*60000>y.timestamp and d.host_id=y.host_id and d.res_id=y.res_id group by d.host_id,d.res_id, floor(d.timestamp/60000)*60000.0000";
-				base_ah[tbl]+= "from am$"+tbl+" d, (select u.host_id, u.res_id, max(u.timestamp) as timestamp from (select x.host_id, x.res_id, max(x.timestamp) as timestamp from ah$"+tbl+" x group by x.host_id, x.res_id union all select z.host_id, z.res_id, 0.0000 as timestamp from am$"+tbl+" z group by z.host_id, z.res_id) u group by u.host_id, u.res_id) y where floor(d.timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" and floor(d.timestamp/3600000)*3600000>y.timestamp and d.host_id=y.host_id and d.res_id=y.res_id group by d.host_id,d.res_id, floor(d.timestamp/3600000)*3600000.0000";
+				base_am[tbl]+= "from d$"+tbl+" d, (select u."+id_name+", u.res_id, max(u.timestamp) as timestamp from (select x."+id_name+", x.res_id, max(x.timestamp) as timestamp from am$"+tbl+" x group by x."+id_name+", x.res_id union all select z."+id_name+", z.res_id, 0.0000 as timestamp from d$"+tbl+" z group by z."+id_name+", z.res_id) u group by u."+id_name+", u.res_id) y where floor(d.timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" and floor(d.timestamp/60000)*60000>y.timestamp and d."+id_name+"=y."+id_name+" and d.res_id=y.res_id group by d."+id_name+",d.res_id, floor(d.timestamp/60000)*60000.0000";
+				base_ah[tbl]+= "from am$"+tbl+" d, (select u."+id_name+", u.res_id, max(u.timestamp) as timestamp from (select x."+id_name+", x.res_id, max(x.timestamp) as timestamp from ah$"+tbl+" x group by x."+id_name+", x.res_id union all select z."+id_name+", z.res_id, 0.0000 as timestamp from am$"+tbl+" z group by z."+id_name+", z.res_id) u group by u."+id_name+", u.res_id) y where floor(d.timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" and floor(d.timestamp/3600000)*3600000>y.timestamp and d."+id_name+"=y."+id_name+" and d.res_id=y.res_id group by d."+id_name+",d.res_id, floor(d.timestamp/3600000)*3600000.0000";
 				
 				if(!haveAM) {
-					create_am += "from "+tbl+" where floor(timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" group by host_id,res_id, floor(timestamp/60000)*60000.0000";
+					create_am += "from d$"+tbl+" where floor(timestamp/60000)<floor(UNIX_TIMESTAMP(now())/60)-"+std::to_string(m_delay)+" group by "+id_name+",res_id, floor(timestamp/60000)*60000.0000";
 					mysqlpp::Query qam = db->query(create_am);
-					myqExec(qam, "Failed to create aggregate AM")
+					myqExec(qam, "statAggregator::init", "Failed to create aggregate AM")
 
-					mysqlpp::Query qama = db->query("alter table am$"+tbl+" add constraint primary key (host_id, res_id, timestamp)");
-					myqExec(qama, "Failed to alter aggregate AM")
+					mysqlpp::Query qama = db->query("alter table am$"+tbl+" add constraint primary key ("+id_name+", res_id, timestamp)");
+					myqExec(qama, "statAggregator::init", "Failed to alter aggregate AM")
+					// TODO: add the foreign key to (s|h)$ressources
 				}
 				if(!haveAH) {
-					create_ah += "from am$"+tbl+" where floor(timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" group by host_id,res_id, floor(timestamp/3600000)*3600000.0000";
+					create_ah += "from am$"+tbl+" where floor(timestamp/3600000)<floor(UNIX_TIMESTAMP(now())/3600)-"+std::to_string(h_delay)+" group by "+id_name+",res_id, floor(timestamp/3600000)*3600000.0000";
 
 					mysqlpp::Query qah = db->query(create_ah);
-					myqExec(qah, "Failed to create aggregate AH")
+					myqExec(qah, "statAggregator::init", "Failed to create aggregate AH")
 
-					mysqlpp::Query qaha = db->query("alter table ah$"+tbl+" add constraint primary key (host_id, res_id, timestamp)");
-					myqExec(qaha, "Failed to alter aggregate AH")
+					mysqlpp::Query qaha = db->query("alter table ah$"+tbl+" add constraint primary key ("+id_name+", res_id, timestamp)");
+					myqExec(qaha, "statAggregator::init", "Failed to alter aggregate AH")
+					// TODO: add the foreign key to (s|h)$ressources
 				}
 			}
 
@@ -108,24 +113,24 @@ void	statAggregator::startThread() {
 		while (active) {
 			mysqlpp::Connection::thread_start();
 			mysqlpp::ScopedConnection db(*dbp, true);
-			if (!db) { std::cerr << "Failed to get a connection from the pool!" << std::endl; return; }
+			if (!db) { l->error("statAggregator::thread", "Failed to get a connection from the pool!"); return; }
 			//std::cout << "===================================================================================" << std::endl;
 			for(std::map<std::string,std::string>::iterator i = base_am.begin();i != base_am.end();i++) {
 				//std::cout << "Aggregating "+i->first << std::endl;
 				mysqlpp::Query query = db->query();
 				query << base_am[i->first];
-				myqExec(query, "Failed to insert aggregate AM")
+				myqExec(query, "statAggregator::thread", "Failed to insert aggregate AM")
 				query << base_ah[i->first];
-				myqExec(query, "Failed to insert aggregate AH")
-				q="delete from "+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["retention"].asString()+")*1000*"+std::to_string(sec2day);
+				myqExec(query, "statAggregator::thread", "Failed to insert aggregate AH")
+				q="delete from d$"+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["retention"].asString()+")*1000*"+std::to_string(sec2day);
 				query <<q;
-				myqExec(query, "Failed to purge raw data")
+				myqExec(query, "statAggregator::thread", "Failed to purge raw data")
 				q="delete from am$"+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["am_retention"].asString()+")*1000*"+std::to_string(sec2day);
 				query <<q;
-				myqExec(query, "Failed to purge aggregate AM")
+				myqExec(query, "statAggregator::thread", "Failed to purge aggregate AM")
 				q="delete from ah$"+i->first+" where timestamp<(floor(UNIX_TIMESTAMP(now())/"+std::to_string(sec2day)+")-"+(*cfg)["ah_retention"].asString()+")*1000*"+std::to_string(sec2day);
 				query <<q;
-				myqExec(query, "Failed to purge aggregate AH")
+				myqExec(query, "statAggregator::thread", "Failed to purge aggregate AH")
 			}
 			mysqlpp::Connection::thread_end();
 			std::this_thread::sleep_for(std::chrono::seconds((*cfg)["m_delay"].asInt()*60));
