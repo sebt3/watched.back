@@ -25,12 +25,12 @@ bool	dbTools::haveTable(std::string p_name) {
 	mysqlpp::Connection::thread_end();
 	return false;
 }
-bool	dbTools::haveRessource(std::string p_name) {
+bool	dbTools::haveRessource(std::string p_origin, std::string p_name) {
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { l->error("dbTools::haveRessource", "Failed to get a connection from the pool!"); return false; }
 	mysqlpp::Query query = db->query();
-	query << "select count(*) from c$ressources where name=" << mysqlpp::quote << p_name;
+	query << "select count(*) from c$ressources where name=" << mysqlpp::quote << p_name << " and origin=" << mysqlpp::quote << p_origin;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		mysqlpp::Connection::thread_end();
@@ -40,12 +40,12 @@ bool	dbTools::haveRessource(std::string p_name) {
 	return false;
 }
 
-uint32_t dbTools::getRessourceId(std::string p_res) {
+uint32_t dbTools::getRessourceId(std::string p_origin, std::string p_res) {
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { l->error("dbTools::getRessourceId", "Failed to get a connection from the pool!"); return 0; }
 	mysqlpp::Query query = db->query();
-	query << "select id from c$ressources where name=" << mysqlpp::quote << p_res;
+	query << "select id from c$ressources where name=" << mysqlpp::quote << p_res << " and origin=" << mysqlpp::quote << p_origin;
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		mysqlpp::Connection::thread_end();

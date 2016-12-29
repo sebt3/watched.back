@@ -23,17 +23,26 @@ void agentClient::createRessources() {
 	if (!db) { l->error("agentClient::createRessources", "Failed to get a connection from the pool!"); return; }
 	for (Json::Value::iterator i = api["paths"].begin();i!=api["paths"].end();i++) {
 		std::string res = i.key().asString().substr(1, i.key().asString().rfind("/")-1);
+		std::string origin = "service";
+		std::string name;
+		if (res.substr(0,7) == "system/") {
+			origin = "host";
+			name   = res.substr(7);
+		} else {
+			auto p = res.substr(9).find("/") + 10;
+			name = res.substr(p);
+		}
 		if (i.key().asString().substr(i.key().asString().rfind("/")+1) != "history") continue; //ignore non-history paths
 		if ( ! (*i).isMember("get") ) continue;	// ignore non-getter paths
 
 		// TODO: should check that this $ref actually exist
 		std::string ref = (*i)["get"]["responses"]["200"]["schema"]["items"]["$ref"].asString();
 		std::string tbl	= ref.substr(ref.rfind("/")+1);
-		if (! haveRessource(res)) {
-			mysqlpp::Query query = db->query("insert into c$ressources(name, type) values('"+res+"','"+tbl+"')");
+		if (! haveRessource(origin, name)) {
+			mysqlpp::Query query = db->query("insert into c$ressources(name, origin, data_type) values('"+name+"','"+origin+"','"+tbl+"')");
 			myqExec(query, "agentClient::createRessources", "Failed to insert ressource")
 		}
-		uint32_t resid = getRessourceId(res);
+		uint32_t resid = getRessourceId(origin, name);
 		uint32_t hostid = getHost((*i)["x-host"].asString());
 		uint32_t servid = 0;
 		if (resid==0) continue;
@@ -76,6 +85,7 @@ void agentClient::createTables() {
 	if (!db) {  l->error("agentClient::createTables", "Failed to get a connection from the pool!"); return; }
 	for (Json::Value::iterator i = api["definitions"].begin();i!=api["definitions"].end();i++) {
 		std::string serv = "service";
+		pk  = "host_id";
 		if (i->isMember("x-isService")) {
 			if(!(*i)["x-isService"].asBool())
 				continue; // this is the core tables defined in the schema.sql
@@ -109,7 +119,7 @@ void agentClient::createTables() {
 			ss << fk << std::endl;
 			ss << ")" << std::endl;
 			mysqlpp::Query query = db->query(ss.str());
-			myqExec(query, "agentClient::createTables", "Failed to create data table")
+			myqExec(query, "agentClient::createTables", "Failed to create data table: d$"+i.key().asString())
 		} else {
 			// check for missing columns and add them as needed
 			for (Json::Value::iterator j = (*i)["properties"].begin();j!=(*i)["properties"].end();j++) {

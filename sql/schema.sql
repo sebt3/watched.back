@@ -1,6 +1,3 @@
--------------------------
---- Core model
---
 create table c$agents (
 	id 		int(32) unsigned auto_increment,
 	host 		varchar(256) not null, 
@@ -15,9 +12,10 @@ create table c$agents (
 create table c$ressources (
 	id		int(32)	unsigned auto_increment, 
 	name		varchar(256) not null,
-	type		varchar(256) not null,
+	origin		varchar(256) not null,
+	data_type	varchar(256) not null,
 	constraint ressources_pk primary key (id),
-	constraint unique index ressources_u (name)
+	constraint unique index ressources_u (data_type, name, origin)
 );
 
 create table c$domains(
@@ -34,11 +32,8 @@ create table c$event_types(
 	constraint unique index event_types_u(name)
 );
 
-create view c$data_tables as select distinct type as table_name from c$ressources;
+create view c$data_tables as select distinct data_type as table_name from c$ressources;
 
--------------------------
---- Host model
---
 create table h$hosts(
 	id		int(32) unsigned auto_increment,
 	name		varchar(256) not null,
@@ -83,15 +78,12 @@ create table h$res_events(
 );
 
 create view h$monitoring_items as
-select ar.*, r.name as res_name, r.type as res_type, ef.host_id as factory_host_id, ef.res_id as factory_res_id, ef.res_type as factory_res_type, ef.event_type, et.name as event_name, ef.property, ef.oper, ef.value
+select ar.*, r.name as res_name, r.origin, r.data_type as res_type, ef.host_id as factory_host_id, ef.res_id as factory_res_id, ef.res_type as factory_res_type, ef.event_type, et.name as event_name, ef.property, ef.oper, ef.value
   from c$ressources r, h$ressources ar, h$event_factory ef, c$event_types et
  where ar.res_id=r.id
    and ef.event_type = et.id
-   and (ef.host_id =ar.host_id or ef.host_id is null) and (ef.res_id=ar.res_id or ef.res_id is null) and (ef.res_type=r.type or ef.res_type is null);
+   and (ef.host_id =ar.host_id or ef.host_id is null) and (ef.res_id=ar.res_id or ef.res_id is null) and (ef.res_type=r.data_type or ef.res_type is null);
 
--------------------------
---- Services model
---
 create table s$services (
 	id		int(32) unsigned auto_increment,
 	host_id		int(32) unsigned,
@@ -173,11 +165,6 @@ select min(timestamp) as timestamp, status, serv_id from s$sockets where (UNIX_T
 union
 select min(timestamp) as timestamp, status, serv_id from s$process where (UNIX_TIMESTAMP()*1000-timestamp)/1000>60*15 or status not like 'ok%' group by status, serv_id;
 
--- TODO : add all the missing foreign keys
-
--------------------------
---- Insert base data
---
 insert into c$domains(name) values ("Production"),("Qualification"),("Testing"),("Developpement");
 insert into c$agents(host,port) values('localhost',9080);
 insert into c$event_types(name) values ("Critical"),("Error"),("Warning"),("Notice"),("Information");

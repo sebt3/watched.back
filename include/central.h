@@ -121,8 +121,8 @@ public:
 protected:
 	bool		haveTable(std::string p_name);
 	bool		tableHasColumn(std::string p_name, std::string p_col);
-	bool		haveRessource(std::string p_name);
-	uint32_t	getRessourceId(std::string p_res);
+	bool		haveRessource(std::string p_origin, std::string p_name);
+	uint32_t	getRessourceId(std::string p_origin, std::string p_res);
 	bool		haveHost(std::string p_host_name);
 	uint32_t	getHost(std::string p_host_name);
 	bool		haveService(uint32_t p_host_id, std::string p_service);
