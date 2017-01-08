@@ -200,6 +200,7 @@ void agentClient::startThread() {
 	my_thread = std::thread ([this](){
 		while(this->active) {
 			services->collect();
+			services->collectLog();
 			for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it)
 				(*it)->collect();
 			std::this_thread::sleep_for(std::chrono::seconds(pool_freq));

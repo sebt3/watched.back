@@ -7,6 +7,34 @@ void	servicesClient::init() {
 	// Here for futur use (if any)
 }
 
+void	servicesClient::collectLog() {
+	Json::Value data;
+	//TODO: support the "since" flag
+	if(!client->getJSON("/service/all/log", data)) return;
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("servicesClient::collectLog", "Failed to get a connection from the pool!"); return; }
+
+	for (Json::Value::iterator i = data.begin();i!=data.end();i++) {
+		uint32_t host_id = getHost((*i)["host"].asString());
+		uint32_t serv_id = getService(host_id, i.key().asString());
+		for (Json::Value::iterator j = (*i)["entries"].begin();j!=(*i)["entries"].end();j++) {
+			uint32_t event_type_id = getEventType((*j)["level"].asString());
+			// TODO: check if this log event already exist before triggering the alert
+			mysqlpp::Query q = db->query();
+			q << "insert into s$log_events(serv_id,timestamp,event_type,source_name,date_field,line_no,text) values (" 
+				<< serv_id << "," << (*j)["timestamp"].asDouble() << ","
+				<< event_type_id << "," << mysqlpp::quote << (*j)["source"].asString() << "," 
+				<< mysqlpp::quote << (*j)["date_mark"].asString() << ","
+				<< (*j)["line_no"].asUInt() << "," << mysqlpp::quote << (*j)["text"].asString()
+				<< ") ON DUPLICATE KEY UPDATE text="
+				<< mysqlpp::quote << (*j)["text"].asString();
+			myqExec(q, "servicesClient::collectLog", "Failed to insert a log entry")
+		}
+	}
+	mysqlpp::Connection::thread_end();
+}
+
 void	servicesClient::collect() {
 	// 1st: get the data from the client
 	Json::Value data;
@@ -29,7 +57,6 @@ void	servicesClient::collect() {
 
 		// adding process
 		for (Json::Value::iterator j = (*i)["process"].begin();j!=(*i)["process"].end();j++) {
-			//std::cout << (*j)["name"] << std::endl;
 			std::string querystr;
 			if ((*j)["status"].asString() == "ok") {
 				ok++;

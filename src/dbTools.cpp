@@ -56,7 +56,6 @@ uint32_t dbTools::getRessourceId(std::string p_origin, std::string p_res) {
 	return 0;
 }
 
-
 bool	dbTools::tableHasColumn(std::string p_name, std::string p_col) {
 	if (!haveTable(p_name)) return false;
 	mysqlpp::Connection::thread_start();
@@ -133,6 +132,41 @@ uint32_t	dbTools::getService(uint32_t p_host_id, std::string p_service) {
 		myqExec(q, "dbTools::getService", "Failed to insert service")
 	}
 	query << "select id from s$services where host_id="+std::to_string(p_host_id)+" and name=" << mysqlpp::quote << p_service;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]);
+		
+	}
+	mysqlpp::Connection::thread_end();
+	return 0;
+}
+
+bool	dbTools::haveEventType(std::string p_event_type_name) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::haveEventType", "Failed to get a connection from the pool!"); return false; }
+	mysqlpp::Query query = db->query();
+	query << "select count(*) from c$event_types where lower(name)=lower(" << mysqlpp::quote << p_event_type_name << ")";
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]) > 0;
+	}
+	mysqlpp::Connection::thread_end();
+	return false;
+}
+
+uint32_t dbTools::getEventType(std::string p_event_type_name) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::getEventType", "Failed to get a connection from the pool!"); return 0; }
+	mysqlpp::Query query = db->query();
+	if ( !haveEventType(p_event_type_name) ) {
+		mysqlpp::Query q = db->query("insert into c$event_types(name) values('"+p_event_type_name+"')");
+		myqExec(q, "dbTools::getEventType", "Failed to insert event_type")
+	}
+	query << "select id from c$event_types where lower(name)=lower(" << mysqlpp::quote << p_event_type_name << ")";
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		mysqlpp::Connection::thread_end();

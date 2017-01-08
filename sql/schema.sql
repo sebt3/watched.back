@@ -124,8 +124,22 @@ create table s$res_events(
 	current_value	double(20,4) not null,
 	oper		char not null,
 	value		double(20,4) not null,
-	constraint events_pk primary key(id),
+	constraint services_res_events_pk primary key(id),
 	constraint fk_services_events_ressources foreign key(serv_id, res_id) references s$ressources(serv_id, res_id) on delete cascade on update cascade
+);
+
+create table s$log_events(
+	id		int(32) unsigned auto_increment,
+	serv_id		int(32) unsigned not null,
+	timestamp	double(20,4) unsigned not null,
+	event_type	int(32) unsigned not null,
+	source_name	varchar(256) not null,
+	date_field	varchar(256) not null,
+	line_no		int(32) unsigned not null,
+	text		varchar(4096),
+	constraint services_log_events_pk primary key(id),
+	constraint unique index services_log_events_u(serv_id,source_name,date_field,line_no),
+	constraint fk_services_log_events_servid foreign key(serv_id) references s$services(id)   on delete cascade on update cascade
 );
 
 create table s$sockets (

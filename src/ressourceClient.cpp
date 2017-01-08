@@ -129,7 +129,6 @@ void	ressourceClient::collect() {
 							found  = i->first;
 					}
 					mysqlpp::Query query = db->query();
-					// TODO: once the service ressource factory is on, support tables accordingly
 					if (found>0) {
 						// if the event already exist update
 						query << "update "+typed+"res_events set current_value=" << line[e->property] << " where id=" << found;

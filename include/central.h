@@ -125,6 +125,8 @@ protected:
 	uint32_t	getRessourceId(std::string p_origin, std::string p_res);
 	bool		haveHost(std::string p_host_name);
 	uint32_t	getHost(std::string p_host_name);
+	bool		haveEventType(std::string p_event_type_name);
+	uint32_t	getEventType(std::string p_event_type_name);
 	bool		haveService(uint32_t p_host_id, std::string p_service);
 	uint32_t	getService(uint32_t p_host_id, std::string p_service);
 	std::shared_ptr<dbPool>	dbp;
@@ -175,6 +177,7 @@ public:
 	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<HttpClient> p_client): dbTools(p_db, p_l), agt_id(p_agt_id), client(p_client) { }
 	void	init();
 	void	collect();
+	void	collectLog();
 private:
 	uint32_t		agt_id;
 	std::shared_ptr<HttpClient>				client;

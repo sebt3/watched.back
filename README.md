@@ -29,6 +29,7 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
 - Collect the agents data and store that in a Mysql database
 - Compute aggregated data
 - Monitor ressources values and create event in the database if it cross configured limits
+- Collect service log and create log events in the database
 - Collect services status and update the database accordingly and historize
 - Collect services metrics
 - Scalable : the work-load can be splitted in sub-groups of backend
@@ -36,5 +37,4 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
 - Highly Available
 
 ## Planned
-- Collect service log and create log events in the database
 - Plugin (C++ or Lua) based trigger on events for alerting
