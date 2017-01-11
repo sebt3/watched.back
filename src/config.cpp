@@ -131,6 +131,15 @@ Json::Value* 	Config::getAggregate() {
 	return &(data["aggregate"]); 
 }
 
+Json::Value* 	Config::getAlerter() {
+	Json::Value obj_value(Json::objectValue);
+	if(! data.isMember("alerters")) {
+		data["alerters"] = obj_value;
+		data["alerters"].setComment(std::string("/*\tConfigure the alerters */"), Json::commentBefore);
+	}
+	return &(data["alerters"]); 
+}
+
 Json::Value* 	Config::getCentral() {
 	Json::Value obj_value(Json::objectValue);
 	if(! data.isMember("central")) {

@@ -18,9 +18,13 @@ void	servicesClient::collectLog() {
 	for (Json::Value::iterator i = data.begin();i!=data.end();i++) {
 		uint32_t host_id = getHost((*i)["host"].asString());
 		uint32_t serv_id = getService(host_id, i.key().asString());
+		uint32_t maxlvl = 0;
+		std::string t="";
 		for (Json::Value::iterator j = (*i)["entries"].begin();j!=(*i)["entries"].end();j++) {
+			if(haveLogEvent(serv_id, (*j)["source"].asString(), (*j)["line_no"].asUInt(), (*j)["date_mark"].asString())) continue;
+			t+=(*j)["text"].asString()+"\n";
 			uint32_t event_type_id = getEventType((*j)["level"].asString());
-			// TODO: check if this log event already exist before triggering the alert
+			if (maxlvl<event_type_id) maxlvl=event_type_id;
 			mysqlpp::Query q = db->query();
 			q << "insert into s$log_events(serv_id,timestamp,event_type,source_name,date_field,line_no,text) values (" 
 				<< serv_id << "," << (*j)["timestamp"].asDouble() << ","
@@ -31,6 +35,8 @@ void	servicesClient::collectLog() {
 				<< mysqlpp::quote << (*j)["text"].asString();
 			myqExec(q, "servicesClient::collectLog", "Failed to insert a log entry")
 		}
+		if (maxlvl>0)
+			alert->sendLog(host_id, serv_id, maxlvl, t);
 	}
 	mysqlpp::Connection::thread_end();
 }
@@ -40,7 +46,10 @@ void	servicesClient::collect() {
 	Json::Value data;
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
 
-	if(!client->getJSON("/service/all/status", data)) return;
+	// TODO: add a statusHistory table for c$agent 
+	// TODO: input that table based on the status of this getJSON call
+	// TODO: send an alert when new failed
+	if(!client->getJSON("/service/all/status", data)) return; 
 	
 	// then insert into database
 	mysqlpp::Connection::thread_start();
@@ -52,6 +61,7 @@ void	servicesClient::collect() {
 		uint32_t host_id = getHost((*i)["host"].asString());
 		uint32_t serv_id = getService(host_id, i.key().asString());
 		uint32_t failed  = 0;
+		uint32_t nfailed = 0;
 		uint32_t ok      = 0;
 		hosts.insert(host_id);
 
@@ -68,6 +78,7 @@ void	servicesClient::collect() {
 					"',cwd='"+(*j)["cwd"].asString()+"',username='"+(*j)["username"].asString()+
 					"',pid="+(*j)["pid"].asString()+",status='"+(*j)["status"].asString()+"',timestamp="+std::to_string(fp_ms.count());
 			} else {
+				if (!haveProcessStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString())) nfailed++;
 				failed++;
 				querystr = "insert into s$process(serv_id,name,full_path,cwd,username,pid,status,timestamp) values ("+std::to_string(serv_id)+
 					",'"+(*j)["name"].asString()+"','"+(*j)["full_path"].asString()+
@@ -83,9 +94,11 @@ void	servicesClient::collect() {
 		// adding sockets
 		for (Json::Value::iterator j = (*i)["sockets"].begin();j!=(*i)["sockets"].end();j++) {
 			//std::cout << (*j)["name"] << std::endl;
-			if ((*j)["status"].asString() != "ok")
+			if ((*j)["status"].asString() != "ok") {
+				if (!haveSocketStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString())) nfailed++;
+
 				failed++;
-			else	ok++;
+			} else	ok++;
 
 			mysqlpp::Query q = db->query(
 				"insert into s$sockets(serv_id,name,status,timestamp) values ("+std::to_string(serv_id)+
@@ -93,6 +106,10 @@ void	servicesClient::collect() {
 				"',"+std::to_string(fp_ms.count())+") ON DUPLICATE KEY UPDATE status='"+(*j)["status"].asString()+
 				"',timestamp="+std::to_string(fp_ms.count()));
 			myqExec(q, "servicesClient::collect", "Failed to insert socket")
+		}
+		if (nfailed>0) {
+			std::string msg="Service "+i.key().asString()+" on "+(*i)["host"].asString()+" have "+std::to_string(failed)+" failed componant";
+			alert->sendService(host_id, serv_id, msg);
 		}
 		
 		// updating status

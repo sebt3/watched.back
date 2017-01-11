@@ -10,6 +10,54 @@ namespace watcheD {
  * dbTools
  */
 
+bool	dbTools::haveProcessStatus(uint32_t p_serv_id, std::string p_name, std::string p_status) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::haveProcessStatus", "Failed to get a connection from the pool!"); return false; }
+	mysqlpp::Query query = db->query();
+	query << "select count(*) from s$process where serv_id="<<p_serv_id<<" and name=" << mysqlpp::quote << p_name << " and status=" << mysqlpp::quote << p_status;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]) > 0;
+		
+	}
+	mysqlpp::Connection::thread_end();
+	return false;
+}
+
+bool	dbTools::haveSocketStatus(uint32_t p_serv_id, std::string p_name, std::string p_status) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::haveSocketStatus", "Failed to get a connection from the pool!"); return false; }
+	mysqlpp::Query query = db->query();
+	query << "select count(*) from s$sockets where serv_id="<<p_serv_id<<" and name=" << mysqlpp::quote << p_name << " and status=" << mysqlpp::quote << p_status;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]) > 0;
+		
+	}
+	mysqlpp::Connection::thread_end();
+	return false;
+}
+
+bool	dbTools::haveLogEvent(uint32_t p_serv_id, std::string p_source_name, uint32_t p_line_no, std::string p_date_field) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::haveLogEvent", "Failed to get a connection from the pool!"); return false; }
+	mysqlpp::Query query = db->query();
+	query << "select count(*) from s$log_events where serv_id="<<p_serv_id<<" and source_name=" << mysqlpp::quote << p_source_name << " and line_no="<<p_line_no<<" and date_field=" << mysqlpp::quote << p_date_field;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]) > 0;
+		
+	}
+	mysqlpp::Connection::thread_end();
+	return false;
+}
+
 bool	dbTools::haveTable(std::string p_name) {
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);

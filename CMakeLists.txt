@@ -23,6 +23,9 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 if(${CMAKE_INSTALL_PREFIX} STREQUAL "/usr")
 	set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "read-only single-machine data (etc)")
 	set(CMAKE_INSTALL_LOCALSTATEDIR "/var" CACHE PATH "modifiable single-machine data (var)")
+else()
+	set(CMAKE_INSTALL_SYSCONFDIR "${CMAKE_INSTALL_PREFIX}/etc" CACHE PATH "read-only single-machine data (etc)")
+	set(CMAKE_INSTALL_LOCALSTATEDIR "${CMAKE_INSTALL_PREFIX}/var" CACHE PATH "modifiable single-machine data (var)")
 endif(${CMAKE_INSTALL_PREFIX} STREQUAL "/usr")
 include(GNUInstallDirs)
 
@@ -43,20 +46,34 @@ endif()
 ####
 ## Compiler option
 #
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fPIC")
+set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}  -fPIC")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--as-needed -rdynamic")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH "ON")
 
 ####
 ## Dependencies
 #
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+set(BOOST_COMPONENTS system thread filesystem date_time)
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9)
+        set(BOOST_COMPONENTS ${BOOST_COMPONENTS} regex)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_BOOST_REGEX")
+    endif()
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=1024")
+endif()
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Boost 1.53.0 COMPONENTS regex system thread filesystem date_time REQUIRED)
+find_package(Boost 1.54.0 COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Jsoncpp REQUIRED)
 find_package(Mysqlpp REQUIRED)
+find_package(Lua 5.2 REQUIRED)
 include(${CMAKE_SOURCE_DIR}/cmake/Modules/systemdservice.cmake)
-include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
+include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
 
 ####
 ## Sources
@@ -92,7 +109,7 @@ endif (SYSTEMD_FOUND)
 ## Targets
 #
 add_executable(watched.back ${BACK_SOURCE_FILES} ${PROJECT_BINARY_DIR}/back.config.json)
-target_link_libraries(watched.back ${MYSQLPP_LIBRARIES} ${JSONCPP_LIBRARIES} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(watched.back dl ${MYSQLPP_LIBRARIES} ${JSONCPP_LIBRARIES} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${LUA_LIBRARIES})
 install(TARGETS watched.back DESTINATION sbin COMPONENT binaries)
 install(FILES ${PROJECT_BINARY_DIR}/back.config.json DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/watched COMPONENT config)
 

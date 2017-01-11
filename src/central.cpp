@@ -12,7 +12,8 @@ int main(int argc, char *argv[]) {
 	std::shared_ptr<Config>		cfg	= std::make_shared<Config>(cfgfile);
 	std::shared_ptr<dbPool>		db	= std::make_shared<dbPool>(cfg->getDB());
 	std::shared_ptr<watcheD::log>	l	= std::make_shared<watcheD::log>(cfg->getLog());
-	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db, l, cfg->getBackend());
+	std::shared_ptr<alerterManager> alert	= std::make_shared<alerterManager>(db, l, cfg->getAlerter());
+	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db, l, alert, cfg->getBackend());
 	cfg->save();
 	ac->init(cfg->getAggregate());
 	cfg->save();

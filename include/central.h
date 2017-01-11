@@ -1,20 +1,18 @@
 #pragma once
 
+#include "alerter.h"
+
 #include <mysql++/mysql++.h>
 
 /*#include <pistache/net.h>
 #include <pistache/http.h>
 #include <pistache/client.h>*/
 
-#include <json/json.h>
-
-#include <map>
-#include <string>
 #include <thread>
 #include <condition_variable>
-#include <mutex>
 #include <future>
 
+#include "selene.h"
 #include "client_http.hpp"
 #include "client_https.hpp"
 
@@ -24,22 +22,46 @@ extern const std::string APPS_DESC;
 
 namespace watcheD {
 
-class log {
-public:
-	log(Json::Value* p_cfg);
-	void write(uint16_t p_lvl, const std::string p_src, std::string p_message);
-	void write(std::string p_lvl, const std::string p_src, std::string p_message);
-	void error(const std::string p_src, std::string p_message);
-	void warning(const std::string p_src, std::string p_message);
-	void info(const std::string p_src, std::string p_message);
-	void notice(const std::string p_src, std::string p_message);
-	void debug(const std::string p_src, std::string p_message);
-private:
-	Json::Value*	cfg;
-	uint16_t	level;
-	static const std::vector<std::string> levels;
-	std::mutex	mutex;
+struct res_event {
+	uint32_t	event_type;
+	std::string	property;
+	char		oper;
+	double		value;
+	inline bool operator==(const res_event& l) const {
+		return ( (l.event_type == event_type) && (l.property == property) && (l.oper == oper) && (l.value == value) );
+	}
 };
+
+/*********************************
+ * Alerter Management
+ */
+class luaAlerter : public alerter {
+public:
+	luaAlerter(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::string p_filename);
+	~luaAlerter();
+	
+	void	sendAlert(alerter::levels p_lvl, const std::string p_message);
+private:
+	sel::State	state{true};
+	bool		have_state;
+	std::mutex	lua;
+};
+
+class alerterManager {
+public:
+	alerterManager(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg);
+	void	sendService(uint32_t p_host_id, uint32_t p_serv_id, std::string p_msg);
+	void	sendLog(uint32_t p_host_id, uint32_t p_serv_id, uint32_t p_level, std::string p_lines);
+	void	sendServRessource(uint32_t p_serv_id, std::shared_ptr<res_event> p_event, double p_current);
+	void	sendHostRessource(uint32_t p_host_id, std::shared_ptr<res_event> p_event, double p_current);
+private:
+	void	send(alerter::levels p_lvl, const std::string p_message);
+	std::shared_ptr<dbPool>			dbpool;
+	std::shared_ptr<log>			l;
+	Json::Value*				cfg;
+	std::vector< std::shared_ptr<alerter> >	alerters;
+};
+
 
 /*********************************
  * Http client
@@ -74,6 +96,7 @@ public:
 	Json::Value* 	getLog();
 	Json::Value* 	getDB();
 	Json::Value* 	getCentral();
+	Json::Value* 	getAlerter();
 	Json::Value* 	getBackend() { return &(data["backend"]); }
 	Json::Value* 	getAggregate();
 
@@ -111,44 +134,13 @@ private:
 	unsigned int usedCount;
 
 };
-	
-/*********************************
- * dbTools
- */
-class dbTools {
-public:
-	dbTools(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l) : dbp(p_db), l(p_l) { }
-protected:
-	bool		haveTable(std::string p_name);
-	bool		tableHasColumn(std::string p_name, std::string p_col);
-	bool		haveRessource(std::string p_origin, std::string p_name);
-	uint32_t	getRessourceId(std::string p_origin, std::string p_res);
-	bool		haveHost(std::string p_host_name);
-	uint32_t	getHost(std::string p_host_name);
-	bool		haveEventType(std::string p_event_type_name);
-	uint32_t	getEventType(std::string p_event_type_name);
-	bool		haveService(uint32_t p_host_id, std::string p_service);
-	uint32_t	getService(uint32_t p_host_id, std::string p_service);
-	std::shared_ptr<dbPool>	dbp;
-	std::shared_ptr<log>	l;
-};
 
 /*********************************
  * ressourceClient
  */
-struct res_event {
-	uint32_t	event_type;
-	std::string	property;
-	char		oper;
-	double		value;
-	inline bool operator==(const res_event& l) const {
-		return ( (l.event_type == event_type) && (l.property == property) && (l.oper == oper) && (l.value == value) );
-	}
-};
-
 class ressourceClient : public dbTools {
 public:
-	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client) { }
+	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client), alert(p_alert) { }
 	void	init();
 	void	collect();
 	std::string	getBaseUrl() { return baseurl; }
@@ -165,6 +157,7 @@ private:
 	Json::Value		*def;
 	std::string		baseInsert;
 	std::shared_ptr<HttpClient>				client;
+	std::shared_ptr<alerterManager>				alert;
 	std::vector< std::shared_ptr<struct res_event> >	event_factory;
 	std::map<uint32_t, std::shared_ptr<struct res_event> >	current_events;
 };
@@ -174,13 +167,14 @@ private:
  */
 class servicesClient : public dbTools {
 public:
-	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<HttpClient> p_client): dbTools(p_db, p_l), agt_id(p_agt_id), client(p_client) { }
+	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client): dbTools(p_db, p_l), agt_id(p_agt_id), client(p_client), alert(p_alert) { }
 	void	init();
 	void	collect();
 	void	collectLog();
 private:
 	uint32_t		agt_id;
-	std::shared_ptr<HttpClient>				client;
+	std::shared_ptr<HttpClient>	client;
+	std::shared_ptr<alerterManager> alert;
 	/*std::vector< std::shared_ptr<struct event> >		event_factory;
 	std::map<uint32_t, std::shared_ptr<struct event> >	current_events;*/
 };
@@ -190,7 +184,7 @@ private:
  */
 class agentClient : public dbTools {
 public:
-	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg);
+	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg);
 	~agentClient();
 	void	init();
 	void	updateApi();
@@ -211,6 +205,7 @@ private:
 	std::shared_ptr<servicesClient>	services;
 	std::vector< std::shared_ptr<ressourceClient> >		ressources;
 	Json::Value* 			back_cfg;
+	std::shared_ptr<alerterManager> alert;
 };
 
 /*********************************
@@ -235,7 +230,7 @@ private:
  */
 class agentManager : public dbTools {
 public:
-	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg) : dbTools(p_db, p_l), back_cfg(p_cfg) { }
+	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), back_cfg(p_cfg), alert(p_alert) { }
 	void	init(Json::Value* p_aggregCfg);
 	void	startThreads();
 	void	updateAgents();
@@ -243,6 +238,7 @@ private:
 	std::map<uint32_t, std::shared_ptr<agentClient> >	agents;
 	std::shared_ptr<statAggregator>				aggreg;
 	Json::Value* 						back_cfg;
+	std::shared_ptr<alerterManager>				alert;
 };
 }
 

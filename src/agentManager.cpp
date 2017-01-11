@@ -34,7 +34,7 @@ void	agentManager::updateAgents() {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			mysqlpp::Row row = *it;
 			if (agents.find(row[0]) == agents.end()) { // do not start exiting agent
-				agents[row[0]] = std::make_shared<agentClient>(row[0], dbp, l, back_cfg);
+				agents[row[0]] = std::make_shared<agentClient>(row[0], dbp, l, alert, back_cfg);
 				agents[row[0]]->init();
 				count++;
 			} // TODO: request for an updated API for known agents

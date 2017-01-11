@@ -4,3 +4,5 @@ const std::string WATCHED_SSL_KEY="@CMAKE_INSTALL_SYSCONFDIR@/watched/ssl/backen
 const std::string WATCHED_SSL_CERT="@CMAKE_INSTALL_SYSCONFDIR@/watched/ssl/backend.pem";
 const std::string WATCHED_SSL_VRF="@CMAKE_INSTALL_SYSCONFDIR@/watched/ssl/backend.verify.pem";
 const std::string WATCHED_LOG_FILE="@CMAKE_INSTALL_LOCALSTATEDIR@/log/watched.back.log";
+const std::string WATCHED_DLL_ALERT="@CMAKE_INSTALL_PREFIX@/lib/watched/alerter.cpp";
+const std::string WATCHED_LUA_ALERT="@CMAKE_INSTALL_PREFIX@/lib/watched/alerter.lua";

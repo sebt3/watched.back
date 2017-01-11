@@ -6,7 +6,7 @@
 
 namespace watcheD {
 
-agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg) : dbTools(p_db, p_l), ready(false), active(false), id(p_id), back_cfg(p_cfg) {
+agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), ready(false), active(false), id(p_id), back_cfg(p_cfg),alert(p_alert) {
 }
 
 agentClient::~agentClient() {
@@ -62,13 +62,13 @@ void agentClient::createRessources() {
 		}
 
 		if(!found && i->isMember("x-service")) {
-			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(servid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, client);
+			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(servid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, alert, client);
 			rc->setService();
 			rc->init();
 			ressources.push_back(rc);
 		} else if (!found) {
 			// instanciate a ressourceClient
-			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(hostid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, client);
+			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(hostid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, alert, client);
 			rc->init();
 			ressources.push_back(rc);
 		}
@@ -185,7 +185,7 @@ void agentClient::init() {
 	mysqlpp::Connection::thread_end();
 	client = std::make_shared<HttpClient>(baseurl, use_ssl, back_cfg, l);
 
-	services = std::make_shared<servicesClient>(id, dbp, l, client);
+	services = std::make_shared<servicesClient>(id, dbp, l, alert, client);
 	services->init();
 
 	ready = true;
