@@ -40,26 +40,24 @@ public:
 	luaAlerter(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::string p_filename);
 	~luaAlerter();
 	
-	void	sendAlert(alerter::levels p_lvl, const std::string p_message);
+	void	sendAlert(alerter::levels p_lvl, const std::string p_dest, const std::string p_title, const std::string p_message);
 private:
 	sel::State	state{true};
 	bool		have_state;
 	std::mutex	lua;
 };
 
-class alerterManager {
+class alerterManager:public dbTools {
 public:
 	alerterManager(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg);
 	void	sendService(uint32_t p_host_id, uint32_t p_serv_id, std::string p_msg);
 	void	sendLog(uint32_t p_host_id, uint32_t p_serv_id, uint32_t p_level, std::string p_lines);
-	void	sendServRessource(uint32_t p_serv_id, std::shared_ptr<res_event> p_event, double p_current);
-	void	sendHostRessource(uint32_t p_host_id, std::shared_ptr<res_event> p_event, double p_current);
+	void	sendServRessource(uint32_t p_serv_id, uint32_t p_res_id, std::shared_ptr<res_event> p_event, double p_current);
+	void	sendHostRessource(uint32_t p_host_id, uint32_t p_res_id, std::shared_ptr<res_event> p_event, double p_current);
 private:
-	void	send(alerter::levels p_lvl, const std::string p_message);
-	std::shared_ptr<dbPool>			dbpool;
-	std::shared_ptr<log>			l;
+	void	send(alerter::levels p_lvl, const std::string p_alerter, const std::string p_dest, const std::string p_title, const std::string p_message);
 	Json::Value*				cfg;
-	std::vector< std::shared_ptr<alerter> >	alerters;
+	std::map< std::string,std::shared_ptr<alerter> >	alerters;
 };
 
 
@@ -246,11 +244,11 @@ private:
 	try {					\
 	if (! q.exec()) {			\
 		l->error(from,msg);		\
-		l->info(from,q.error());	\
-		l->notice(from,q.str());	\
+		l->notice(from,q.error());	\
+		l->info(from,q.str());		\
 	}					\
 	} catch(const mysqlpp::BadQuery& er) {	\
 		l->error(from,msg);		\
-		l->info(from,q.error());	\
-		l->notice(from,q.str());	\
+		l->notice(from,q.error());	\
+		l->info(from,q.str());		\
 	}

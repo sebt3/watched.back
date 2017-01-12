@@ -140,9 +140,9 @@ void	ressourceClient::collect() {
 					if (found == 0) {
 						current_events[query.insert_id()] = std::make_shared<res_event>(*e);
 						if (typed == "s$")
-							alert->sendServRessource(host_id, current_events[query.insert_id()], line[e->property].asDouble());
+							alert->sendServRessource(host_id, res_id, current_events[query.insert_id()], line[e->property].asDouble());
 						else
-							alert->sendHostRessource(host_id, current_events[query.insert_id()], line[e->property].asDouble());
+							alert->sendHostRessource(host_id, res_id, current_events[query.insert_id()], line[e->property].asDouble());
 					}
 				}
 			}

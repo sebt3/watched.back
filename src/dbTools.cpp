@@ -104,6 +104,21 @@ uint32_t dbTools::getRessourceId(std::string p_origin, std::string p_res) {
 	return 0;
 }
 
+std::string dbTools::getRessourceName(uint32_t p_res) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::getRessourceName", "Failed to get a connection from the pool!"); return 0; }
+	mysqlpp::Query query = db->query();
+	query << "select name from c$ressources where id=" << p_res;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return row[0].c_str();
+	}
+	mysqlpp::Connection::thread_end();
+	return 0;
+}
+
 bool	dbTools::tableHasColumn(std::string p_name, std::string p_col) {
 	if (!haveTable(p_name)) return false;
 	mysqlpp::Connection::thread_start();
@@ -185,6 +200,52 @@ uint32_t	dbTools::getService(uint32_t p_host_id, std::string p_service) {
 		mysqlpp::Connection::thread_end();
 		return int(row[0]);
 		
+	}
+	mysqlpp::Connection::thread_end();
+	return 0;
+}
+
+uint32_t	dbTools::getServiceHost(uint32_t p_service) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::getServiceHost", "Failed to get a connection from the pool!"); return 0; }
+	mysqlpp::Query query = db->query();
+	query << "select host_id from s$services where id=" << p_service;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]);
+	}
+	mysqlpp::Connection::thread_end();
+	return 0;
+}
+
+std::string	dbTools::getServiceName(uint32_t p_host_id, uint32_t p_service) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::getServiceName", "Failed to get a connection from the pool!"); return ""; }
+	mysqlpp::Query query = db->query();
+	query << "select name from s$services where host_id="<<p_host_id<<" and id=" << p_service;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return row[0].c_str();
+	}
+	mysqlpp::Connection::thread_end();
+	return 0;
+}
+
+
+std::string	dbTools::getHostName(uint32_t p_host_id) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::getHostName", "Failed to get a connection from the pool!"); return ""; }
+	mysqlpp::Query query = db->query();
+	query << "select name from h$hosts where id="<<p_host_id;
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return row[0].c_str();
 	}
 	mysqlpp::Connection::thread_end();
 	return 0;
