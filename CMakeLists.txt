@@ -80,6 +80,8 @@ include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boos
 #
 file (GLOB	   HEADER_FILES "include/*.h")
 file (GLOB    BACK_SOURCE_FILES "src/*.cpp")
+file (GLOB    LUA_ALERTER_FILES "luaAlerters/*.lua" )
+file (GLOB    CPP_ALERTER_FILES "alerters/*.cpp" )
 
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/sws)
 install(FILES ${HEADER_FILES} DESTINATION include/watched)
@@ -108,10 +110,24 @@ endif (SYSTEMD_FOUND)
 ####
 ## Targets
 #
+
+# Alerters plugins
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/alerters)
+foreach( alerter_cpp ${CPP_ALERTER_FILES} )
+	get_filename_component( alerter ${alerter_cpp} NAME_WE )
+	add_library( ${alerter} SHARED ${alerter_cpp} )
+	install(TARGETS ${alerter} DESTINATION lib/watched/alerter.cpp)
+endforeach( alerter_cpp ${CPP_ALERTER_FILES} )
+
 add_executable(watched.back ${BACK_SOURCE_FILES} ${PROJECT_BINARY_DIR}/back.config.json)
 target_link_libraries(watched.back dl ${MYSQLPP_LIBRARIES} ${JSONCPP_LIBRARIES} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${LUA_LIBRARIES})
 install(TARGETS watched.back DESTINATION sbin COMPONENT binaries)
 install(FILES ${PROJECT_BINARY_DIR}/back.config.json DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/watched COMPONENT config)
+
+foreach( alerter_lua ${LUA_ALERTER_FILES} )
+	install(FILES ${alerter_lua} DESTINATION lib/watched/alerter.lua)
+endforeach( alerter_lua ${LUA_ALERTER_FILES} )
+
 
 ####
 ## Usefull debug stuff

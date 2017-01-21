@@ -50,7 +50,9 @@ protected:
 	uint32_t	getService(uint32_t p_host_id, std::string p_service);
 	std::string	getServiceName(uint32_t p_host_id, uint32_t p_service);
 	uint32_t	getServiceHost(uint32_t p_service);
-	
+	bool		haveServiceType(std::string p_type);
+	uint32_t	getServiceType(std::string p_type);
+
 	bool		haveLogEvent(uint32_t p_serv_id, std::string p_source_name, uint32_t p_line_no, std::string p_date_field);
 	bool		haveProcessStatus(uint32_t p_serv_id, std::string p_name, std::string p_status);
 	bool		haveSocketStatus(uint32_t p_serv_id, std::string p_name, std::string p_status);

@@ -46,9 +46,10 @@ void log::write(uint16_t p_lvl, const std::string p_src, std::string p_message) 
 	std::unique_lock<std::mutex> locker(mutex); 
 	outfile.open((*cfg)["file"].asString(), std::ios_base::app);
 	if (outfile.is_open())
-		outfile << "[ " << buffer << " - " << std::setw(6) << levels[p_lvl] << " ] "<< std::setw(30) << p_src << " - " << p_message << std::endl;
+		outfile << "[ " << buffer << " | " << std::setw(6) << levels[p_lvl] << " ] "<< std::setw(30) << p_src << " - " << p_message << std::endl;
 	else
-		std::cout << "[ " << buffer << " - " << std::setw(6) << levels[p_lvl] << " ] "<< std::setw(30) << p_src << " - " << p_message << std::endl;
+		std::cout << "[ " << buffer << " | " << std::setw(6) << levels[p_lvl] << " ] "<< std::setw(30) << p_src << " - " << p_message << std::endl;
+	outfile.close();
 }
 
 void log::write(std::string p_lvl, const std::string p_src, std::string p_message) {

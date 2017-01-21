@@ -30,6 +30,7 @@ void	agentManager::updateAgents() {
 	if (domains>0)
 		qstr = "select id from c$agents where central_id="+std::to_string(domains);
 	mysqlpp::Query query = db->query(qstr);
+	try {
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			mysqlpp::Row row = *it;
@@ -41,6 +42,7 @@ void	agentManager::updateAgents() {
 		}
 		l->info("agentManager::updateAgents","Started "+std::to_string(count)+" agents");
 	} else l->error("agentManager::updateAgents","Could not query for agent list");
+	} myqCatch(query, "agentManager::updateAgents","Failed to get agents list")
 	mysqlpp::Connection::thread_end();
 }
 

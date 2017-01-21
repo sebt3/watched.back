@@ -251,4 +251,17 @@ private:
 		l->error(from,msg);		\
 		l->notice(from,q.error());	\
 		l->info(from,q.str());		\
+	} catch ( const std::exception& e ) {	\
+		l->error(from,msg);		\
+		l->notice(from,e.what());	\
+	}
+
+#define myqCatch(q,from,msg)			\
+	catch(const mysqlpp::BadQuery& er) {	\
+		l->error(from,msg);		\
+		l->notice(from,q.error());	\
+		l->info(from,q.str());		\
+	} catch ( const std::exception& e ) {	\
+		l->error(from,msg);		\
+		l->notice(from,e.what());	\
 	}

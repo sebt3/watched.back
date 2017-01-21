@@ -13,6 +13,8 @@ function sendAlert (lvl, dest, title, message)
 	else
 		return -- do nothing with lvl==info alerts
 	end
-	print("luaDemoSendAlert", dest, title, message)
+	--print("luaDemoSendAlert", dest, title, message)
+	mail = io.popen("mail -s '"..title.."' "..dest, "w")
+	mail:write(message.."\n\4")
 	-- one can use io.popen("command") to start a shell command instead
 end

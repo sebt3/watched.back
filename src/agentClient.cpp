@@ -164,6 +164,7 @@ void agentClient::init() {
 	if (!db) { l->error("agentClient::init", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query();
 	query << "select host, port, pool_freq, use_ssl from c$agents where id=" << id;
+	try {
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		if (row[0] == "localhost") {
@@ -182,6 +183,7 @@ void agentClient::init() {
 		mysqlpp::Connection::thread_end();
 		return;
 	}
+	} myqCatch(query, "agentClient::init","Failed to get agent configuration")
 	mysqlpp::Connection::thread_end();
 	client = std::make_shared<HttpClient>(baseurl, use_ssl, back_cfg, l);
 

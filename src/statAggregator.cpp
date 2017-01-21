@@ -37,6 +37,7 @@ void	statAggregator::init(){
 	if (!db) { l->error("statAggregator::init", "Failed to get a connection from the pool!"); return; }
 
 	mysqlpp::Query query = db->query("select table_name from c$data_tables");
+	try {
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator it= res.begin(); it != res.end(); ++it) {
 			std::string tbl = (*it)[0].c_str();
@@ -56,6 +57,7 @@ void	statAggregator::init(){
 			
 			qcols 	<< "select col.column_name from information_schema.columns col where col.TABLE_SCHEMA=DATABASE() and col.table_name = '" << tbl 
 				<< "' and col.data_type in ('int', 'double') and column_name not in ('"+id_name+"', 'res_id', 'timestamp')";
+			try {
 			if (mysqlpp::StoreQueryResult resc = qcols.store()) {
 				for (mysqlpp::StoreQueryResult::const_iterator itc= resc.begin(); itc != resc.end(); ++itc) {
 					std::string col = (*itc)[0].c_str();
@@ -97,9 +99,10 @@ void	statAggregator::init(){
 					// TODO: add the foreign key to (s|h)$ressources
 				}
 			}
-
+			} myqCatch(qcols, "statAggregator::init","Failed to get a data_table column")
 		}
 	}
+	} myqCatch(query, "statAggregator::init","Failed to get data_table list")
 
 	mysqlpp::Connection::thread_end();
 }

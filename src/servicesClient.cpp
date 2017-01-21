@@ -42,13 +42,10 @@ void	servicesClient::collectLog() {
 }
 
 void	servicesClient::collect() {
-	// 1st: get the data from the client
 	Json::Value data;
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
 
-	// TODO: add a statusHistory table for c$agent 
-	// TODO: input that table based on the status of this getJSON call
-	// TODO: send an alert when new failed
+	// 1st: get the data from the client
 	if(!client->getJSON("/service/all/status", data)) return; 
 	
 	// then insert into database
@@ -58,8 +55,9 @@ void	servicesClient::collect() {
 
 	std::set<uint32_t> hosts; // hold all known host for this agent
 	for (Json::Value::iterator i = data.begin();i!=data.end();i++) {
-		uint32_t host_id = getHost((*i)["host"].asString());
+		uint32_t host_id = getHost((*i)["properties"]["host"].asString());
 		uint32_t serv_id = getService(host_id, i.key().asString());
+		uint32_t type_id = getServiceType((*i)["properties"]["type"].asString()); 
 		uint32_t failed  = 0;
 		uint32_t nfailed = 0;
 		uint32_t ok      = 0;
@@ -111,7 +109,13 @@ void	servicesClient::collect() {
 			std::string msg="Service "+i.key().asString()+" on "+(*i)["host"].asString()+" have "+std::to_string(failed)+" failed componant";
 			alert->sendService(host_id, serv_id, msg);
 		}
-		
+
+		// updating service type
+		mysqlpp::Query t = db->query(
+			"update s$services set type_id="+std::to_string(type_id)+" where id="+std::to_string(serv_id)
+		);
+		myqExec(t, "servicesClient::collect", "Failed to update type")
+
 		// updating status
 		mysqlpp::Query p = db->query(
 			"insert into s$history(serv_id,timestamp,failed,missing,ok) values ("+std::to_string(serv_id)+	","+std::to_string(fp_ms.count())+","+std::to_string(failed)+",0,"+std::to_string(ok)+") ON DUPLICATE KEY UPDATE failed="+std::to_string(failed)+",ok="+std::to_string(ok)

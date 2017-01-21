@@ -31,6 +31,7 @@ void	ressourceClient::init() {
 	// load current events
 	mysqlpp::Query q1 = db->query();
 	q1 << "select id, event_type, property, oper, value from "+typed+"res_events where end_time is null and "+id_name+"=" << host_id << " and res_id=" << res_id;
+	try {
 	if (mysqlpp::StoreQueryResult r1 = q1.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator i1= r1.begin(); i1 != r1.end(); ++i1) {
 			mysqlpp::Row row	= *i1;
@@ -42,6 +43,8 @@ void	ressourceClient::init() {
 			current_events[row[0]]	= e;
 		}
 	}
+	} myqCatch(q1,"ressourceClient::init","Failed to get current events for "+table)
+
 
 	// load factory
 	mysqlpp::Query q2 = db->query();
@@ -49,6 +52,7 @@ void	ressourceClient::init() {
 	q2 << " where ("+id_name+"=" << host_id << " or "+id_name+" is null)";
 	q2 << "   and (res_id=" << res_id << " or res_id is null)";
 	q2 << "   and (res_type='" << table << "' or res_type is null)";
+	try {
 	if (mysqlpp::StoreQueryResult r2 = q2.store()) {
 		for (mysqlpp::StoreQueryResult::const_iterator i2= r2.begin(); i2 != r2.end(); ++i2) {
 			mysqlpp::Row row = *i2;
@@ -60,6 +64,7 @@ void	ressourceClient::init() {
 			event_factory.push_back(e);
 		}
 	}
+	} myqCatch(q2,"ressourceClient::init","Failed to get event factory for "+table)
 	mysqlpp::Connection::thread_end();
 }
 
@@ -72,6 +77,7 @@ double  ressourceClient::getSince() {
 	if (!db) { l->error("ressourceClient::getSince", "Failed to get a connection from the pool!"); return -1; }
 	mysqlpp::Query query = db->query();
 	query << "select max(timestamp) from d$"+table+" where "+id_name+"=" << host_id << " and res_id=" << res_id;
+	try {
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
 		if (row[0]!=mysqlpp::null) {
@@ -79,6 +85,7 @@ double  ressourceClient::getSince() {
 			return double(row[0]);
 		}
 	}
+	} myqCatch(query, "ressourceClient::getSince","Failed to get max(timestamp) from d$"+table)
 	mysqlpp::Connection::thread_end();
 	return -1;
 }
