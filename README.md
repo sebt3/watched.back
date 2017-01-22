@@ -35,6 +35,17 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
 - Scalable : the work-load can be splitted in sub-groups of backend
 - Secure : support SSL  agents and can conect to mysql over SSL
 - Highly Available
+- Plugin (C++ or Lua) for alerting
+  * email
 
-## Planned
-- Plugin (C++ or Lua) based trigger on events for alerting
+## TODO
+- Code improvement (agentClient.cpp:38)
+- Request for an updated API for known agents at configured interval (agentManager.cpp:41)
+- Add support for alert on Host failed (alerter.cpp:186)
+- Add support for alert on agent failed (alerter.cpp:188)
+- Add a configuration option for agents updates (backend.cpp:23)
+- Support the since flag (servicesClient.cpp:12)
+- Add support for ad$ tables (statAggregator.cpp)
+- Update aggregate tables with missing columns (statAggregator.cpp:69), (statAggregator.cpp:76)
+- Add foreign keys on aggregate table to (s|h)$ressources (statAggregator.cpp:89), (statAggregator.cpp:99)
+- add support for sigusr1 which reload configs et reopen log

@@ -1,4 +1,4 @@
-#include "central.h"
+#include "backend.h"
 #include <chrono>
 #include <stdlib.h>
 #include <mysql++/exceptions.h>
@@ -91,7 +91,6 @@ void agentClient::createTables() {
 				continue; // this is the core tables defined in the schema.sql
 			pk = "serv_id";
 		} else if (i.key().asString().substr(0,serv.size()) == serv) {
-			//TODO: Remove this test in a few release
 			continue; // ignore service definitions
 		}
 		if ( ! haveTable("d$"+i.key().asString())) {

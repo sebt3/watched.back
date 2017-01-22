@@ -1,4 +1,4 @@
-#include "central.h"
+#include "backend.h"
 #include <chrono>
 #include <stdlib.h>
 #include <mysql++/exceptions.h>
@@ -23,8 +23,6 @@ void	ressourceClient::init() {
 	insert << ") values (" << host_id << ", " << res_id;
 	baseInsert = insert.str();
 
-	if (isService)
-		return; //TODO: load events and factory from adjusted tables
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { l->error("ressourceClient::init", "Failed to get a connection from the pool!"); return; }
@@ -173,7 +171,6 @@ void	ressourceClient::collect() {
 						break;
 				}
 				if (trig) {
-					// TODO: once the service ressource factory is on, support tables accordingly
 					mysqlpp::Query query = db->query();
 					query << "update "+typed+"res_events set end_time=" << line["timestamp"] << " where id=" << id;
 					myqExec(query, "ressourceClient::collect", "Update an event")
