@@ -49,3 +49,4 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
 - Update aggregate tables with missing columns (statAggregator.cpp:69), (statAggregator.cpp:76)
 - Add foreign keys on aggregate table to (s|h)$ressources (statAggregator.cpp:89), (statAggregator.cpp:99)
 - add support for sigusr1 which reload configs et reopen log
+

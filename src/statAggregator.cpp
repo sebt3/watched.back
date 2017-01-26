@@ -55,7 +55,7 @@ void	statAggregator::init(){
 			
 			mysqlpp::Query qcols = db->query();
 			
-			qcols 	<< "select col.column_name from information_schema.columns col where col.TABLE_SCHEMA=DATABASE() and col.table_name = '" << tbl 
+			qcols 	<< "select col.column_name from information_schema.columns col where col.TABLE_SCHEMA=DATABASE() and col.table_name = '" << "d$"+tbl 
 				<< "' and col.data_type in ('int', 'double') and column_name not in ('"+id_name+"', 'res_id', 'timestamp')";
 			try {
 			if (mysqlpp::StoreQueryResult resc = qcols.store()) {
