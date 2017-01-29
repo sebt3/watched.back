@@ -39,6 +39,7 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
   * email
 
 ## TODO
+- Detect missing Host and Agent
 - Code improvement (agentClient.cpp:38)
 - Request for an updated API for known agents at configured interval (agentManager.cpp:41)
 - Add support for alert on Host failed (alerter.cpp:186)

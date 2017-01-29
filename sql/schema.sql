@@ -39,7 +39,14 @@ create table c$event_types(
 	constraint unique index event_types_u(name)
 );
 
-create or replace view c$data_tables as select distinct data_type as table_name from c$ressources;
+create or replace view c$data_tables as 
+select def.data_type, t.table_name as 'data_table', m.table_name as 'aggregate_min', h.table_name as 'aggregate_hour', d.table_name as 'aggregate_day' 
+  from (select distinct data_type, concat('d$',data_type) as data_table, concat('am$',data_type) as am_table, concat('ah$',data_type) as ah_table, concat('ad$',data_type) as ad_table 
+	  from c$ressources) def
+left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) t on t.table_name=def.data_table
+left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) h on h.table_name=def.ah_table
+left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) m on m.table_name=def.am_table
+left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) d on m.table_name=def.ad_table;
 
 create table h$hosts(
 	id		int(32) unsigned auto_increment,
@@ -193,11 +200,35 @@ select min(timestamp) as timestamp, status, serv_id from s$sockets where (UNIX_T
 union
 select min(timestamp) as timestamp, status, serv_id from s$process where (UNIX_TIMESTAMP()*1000-timestamp)/1000>60*15 or status not like 'ok%' group by status, serv_id;
 
-create table a$apps(
+create or replace view s$missing as
+select x.serv_id as id, s.name, s.host_id, max(late_sec) as late_sec, count(distinct status) as cnt_stat, min(status) as status
+  from (
+	select (UNIX_TIMESTAMP()*1000-min(timestamp))/1000 as late_sec, status, serv_id
+	  from s$sockets
+	 group by status, serv_id
+	union
+	select (UNIX_TIMESTAMP()*1000-min(timestamp))/1000 as late_sec, status, serv_id
+	  from s$process
+	 group by status, serv_id
+  ) x, s$services s
+ where x.serv_id = s.id
+   and late_sec>60*15
+ group by x.serv_id, s.name;
+
+create table g$groups(
 	id		int(32) unsigned auto_increment,
 	name		varchar(256) not null,
+	constraint groups_pk primary key(id),
+	constraint unique index groups_name_u(name)
+);
+
+create table a$apps(
+	id		int(32) unsigned auto_increment,
+	group_id	int(32) unsigned,
+	name		varchar(256) not null,
 	constraint apps_pk primary key(id),
-	constraint unique index apps_name_u(name)
+	constraint unique index apps_name_u(name),
+	constraint fk_apps_group foreign key(group_id) references g$groups(id) on delete set null on update cascade
 );
 
 create table a$services(
@@ -266,6 +297,17 @@ create table p$services (
 	constraint fk_perm_services_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
 );
 
+create table p$groups (
+	group_id	int(32) unsigned not null,
+	team_id		int(32) unsigned not null,
+	role_id		int(32) unsigned not null,
+	alert		boolean,
+	constraint perm_groups_pk primary key(group_id,team_id,role_id),
+	constraint fk_perm_groups_group foreign key(group_id) references g$groups(id) on delete cascade on update cascade,
+	constraint fk_perm_groups_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
+	constraint fk_perm_groups_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
+);
+
 create table p$apps (
 	app_id		int(32) unsigned not null,
 	team_id		int(32) unsigned not null,
@@ -291,7 +333,12 @@ select s.serv_id, s.team_id, s.role_id, s.alert
 union
 select sa.serv_id, a.team_id, a.role_id, a.alert
   from p$apps a, a$services sa
- where sa.app_id = a.app_id;
+ where sa.app_id = a.app_id
+union
+select sa.serv_id, g.team_id, g.role_id, g.alert
+  from p$groups g, a$apps a, a$services sa
+ where sa.app_id = a.id
+   and g.group_id= a.group_id;
 
 create or replace view p$teams_all_hosts as
 select hdt.team_id, hdt.host_id, hdt.role_id, hdt.alert
@@ -322,6 +369,8 @@ select t.id as team_id, s.id as host_id, null as role_id, null as alert
 create table u$users (
 	id		int(32) unsigned auto_increment,
 	username	varchar(256) not null,
+	firstname	varchar(128),
+	lastname	varchar(128),
 	passhash	varchar(512),
 	constraint users_pk primary key(id),
 	constraint unique index users_name_u(username)
@@ -365,6 +414,19 @@ select distinct ut.user_id, a.app_id, ts.role_id
   from p$teams_all_services ts, u$teams ut, a$services a
  where ut.team_id=ts.team_id
    and ts.serv_id=a.serv_id;
+
+create or replace view p$users_all_groups as
+select distinct ut.user_id, aa.group_id, ts.role_id
+  from p$teams_all_services ts, u$teams ut, a$services a, a$apps aa
+ where ut.team_id=ts.team_id
+   and ts.serv_id=a.serv_id
+   and a.app_id=aa.id;
+
+create or replace view p$users_admin as
+select u.user_id, t.name as team_name, u.team_id
+  from u$teams u, p$teams t
+ where t.superadmin=true
+   and t.id=u.team_id;
 
 create or replace view p$alert_hosts as
 select h.host_id, tph.prop_id, tph.value
@@ -449,7 +511,7 @@ insert into c$event_types(name) values ("Critical"),("Error"),("Warning"),("Noti
 insert into h$event_factory(res_type, event_type, property, oper, value) values ('disk_usage', 3, 'pctfree', '<', 25),('disk_usage', 2, 'pctfree', '<', 5),('disk_usage', 2, 'ipctfree', '<', 5),('disk_usage', 3, 'ipctfree', '<', 25),('cpu_usage', 5, 'user', '>', 90);
 insert into c$properties(name) values ("email");
 insert into u$users(username) values ("public");
-insert into u$users(username,passhash) values ("admin","somehash");
+insert into u$users(username,passhash) values ("admin",'$2y$10$GG4XXB9YGIZYZ6anAAZN1etXSldQqb1v7uO8p4H1r4eFOdkk80znW');
 insert into s$types(name) values ("database"),("web"),("system");
 insert into p$teams(name, superadmin) values ("admin", true);
 insert into p$teams(name) values ("public"),("Production dba"),("Qualification dba"),("Testing dba"),("Developpement dba"),("Production sysadmin"),("Qualification sysadmin"),("Testing sysadmin"),("Developpement sysadmin"),("Production webadmin"),("Qualification webadmin"),("Testing webadmin"),("Developpement webadmin");
