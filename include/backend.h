@@ -209,14 +209,29 @@ private:
 /*********************************
  * statAggregator
  */
+struct aggreg_data {
+	uint32_t	delay_am;
+	uint32_t	delay_ah;
+	uint32_t	delay_ad;
+	uint32_t	retention_d;
+	uint32_t	retention_am;
+	uint32_t	retention_ah;
+	uint32_t	retention_ad;
+	std::string	base_am;
+	std::string	base_ah;
+	std::string	base_ad;
+	std::chrono::duration<double, std::milli>	next_low;
+	std::chrono::duration<double, std::milli>	next_med;
+	std::chrono::duration<double, std::milli>	next_high;
+};
 class statAggregator : public dbTools {
 public:
 	statAggregator(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_aggregCfg);
 	void	init();
 	void	startThread();
 private:
-	std::map<std::string, std::string>	base_am;
-	std::map<std::string, std::string>	base_ah;
+	std::map<std::string, std::shared_ptr<aggreg_data>>	tables;
+	uint32_t		thread_freq;
 	bool			active;
 	std::thread		my_thread;
 	Json::Value* 		cfg;

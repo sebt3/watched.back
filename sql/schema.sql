@@ -39,14 +39,50 @@ create table c$event_types(
 	constraint unique index event_types_u(name)
 );
 
-create or replace view c$data_tables as 
+create table c$aggregate_config(
+	name		varchar(256) not null,
+	delay_am	int(32) unsigned not null default 30,
+	delay_ah	int(32) unsigned not null default 2,
+	delay_ad	int(32) unsigned not null default 1,
+	retention_d	int(32) unsigned not null default 14,
+	retention_am	int(32) unsigned not null default 120,
+	retention_ah	int(32) unsigned not null default 1826,
+	retention_ad	int(32) unsigned not null default 0,
+	constraint c$aggregate_config_pk primary key(name)
+);
+insert into c$aggregate_config(name) values('default');
+
+create or replace view c$data_tables as
 select def.data_type, t.table_name as 'data_table', m.table_name as 'aggregate_min', h.table_name as 'aggregate_hour', d.table_name as 'aggregate_day' 
   from (select distinct data_type, concat('d$',data_type) as data_table, concat('am$',data_type) as am_table, concat('ah$',data_type) as ah_table, concat('ad$',data_type) as ad_table 
 	  from c$ressources) def
 left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) t on t.table_name=def.data_table
 left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) h on h.table_name=def.ah_table
 left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) m on m.table_name=def.am_table
-left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) d on m.table_name=def.ad_table;
+left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) d on d.table_name=def.ad_table;
+
+create or replace view c$data_sizes as
+select def.data_type, ifnull(t.size,0) + ifnull(m.size,0) + ifnull(h.size,0) + ifnull(d.size,0) as total_size, t.size as 'data_size', m.size as 'min_size', h.size as 'hour_size', d.size as 'day_size',
+	ch.cardinality as 'host_card', cs.cardinality as 'serv_card', cr.cardinality/(ifnull(ch.cardinality,cs.cardinality)) as 'res_card',
+	t.table_rows as 'data_rows', m.table_rows as 'min_rows', h.table_rows as 'hour_rows', d.table_rows as 'days_rows',
+	t.avg_row_length as 'data_avg', m.avg_row_length as 'min_avg', h.avg_row_length as 'hour_avg', d.avg_row_length as 'days_avg'
+  from (select distinct data_type, concat('d$',data_type) as data_table, concat('am$',data_type) as am_table, concat('ah$',data_type) as ah_table, concat('ad$',data_type) as ad_table 
+	  from c$ressources) def
+left join (select table_name, (data_length + index_length)/pow(2,20) as "size", table_rows, avg_row_length from information_schema.tables where TABLE_SCHEMA=DATABASE()) t on t.table_name=def.data_table
+left join (select table_name, (data_length + index_length)/pow(2,20) as "size", table_rows, avg_row_length from information_schema.tables where TABLE_SCHEMA=DATABASE()) h on h.table_name=def.ah_table
+left join (select table_name, (data_length + index_length)/pow(2,20) as "size", table_rows, avg_row_length from information_schema.tables where TABLE_SCHEMA=DATABASE()) m on m.table_name=def.am_table
+left join (select table_name, (data_length + index_length)/pow(2,20) as "size", table_rows, avg_row_length from information_schema.tables where TABLE_SCHEMA=DATABASE()) d on d.table_name=def.ad_table
+left join (select table_name, cardinality from information_schema.statistics where table_schema=database() and column_name='host_id') ch on ch.table_name=def.data_table
+left join (select table_name, cardinality from information_schema.statistics where table_schema=database() and column_name='serv_id') cs on cs.table_name=def.data_table
+left join (select table_name, cardinality from information_schema.statistics where table_schema=database() and column_name='res_id') cr on cr.table_name=def.data_table;
+
+create or replace view c$data_configs as
+select	d.data_type, ifnull(a.delay_am, c.delay_am) delay_am,  ifnull(a.delay_ah, c.delay_ah) delay_ah, ifnull(a.delay_ad, c.delay_ad) delay_ad, 
+	ifnull(a.retention_d, c.retention_d) retention_d, ifnull(a.retention_am, c.retention_am) retention_am, 
+	ifnull(a.retention_ah, c.retention_ah) retention_ah, ifnull(a.retention_ad, c.retention_ad) retention_ad
+  from (select * from c$aggregate_config where name = 'default') c, (select distinct data_type from c$ressources) d
+left join c$aggregate_config a on d.data_type=a.name;
+
 
 create table h$hosts(
 	id		int(32) unsigned auto_increment,
@@ -63,6 +99,8 @@ create table h$ressources(
 	constraint fk_host_ressources_hostid foreign key(host_id) references h$hosts(id)      on delete cascade on update cascade,
 	constraint fk_host_ressources_resid  foreign key(res_id)  references c$ressources(id) on delete cascade on update cascade
 );
+create index host_ressources_hostid_i on h$ressources(host_id);
+create index host_ressources_resid_i on h$ressources(res_id);
 
 create table h$event_factory(
 	host_id		int(32) unsigned,
@@ -75,6 +113,8 @@ create table h$event_factory(
 	constraint fk_host_factory_hostid foreign key(host_id) references h$hosts(id)      on delete cascade on update cascade,
 	constraint fk_host_factory_resid  foreign key(res_id)  references c$ressources(id) on delete cascade on update cascade
 );
+create index host_factory_hostid_i on h$event_factory(host_id);
+create index host_factory_resid_i on h$event_factory(res_id);
 
 create table h$res_events(
 	id		int(32) unsigned auto_increment,
@@ -90,6 +130,7 @@ create table h$res_events(
 	constraint events_pk primary key(id),
 	constraint fk_host_events_ressources foreign key(host_id, res_id) references h$ressources(host_id, res_id) on delete cascade on update cascade
 );
+create index host_events_ressources_i on h$res_events(host_id, res_id);
 
 create or replace view h$monitoring_items as
 select ar.*, r.name as res_name, r.origin, r.data_type as res_type, ef.host_id as factory_host_id, ef.res_id as factory_res_id, ef.res_type as factory_res_type, ef.event_type, et.name as event_name, ef.property, ef.oper, ef.value
@@ -113,6 +154,7 @@ create table s$services (
 	constraint unique index services_u(host_id, name),
 	constraint fk_services_hostid foreign key(host_id) references h$hosts(id) on delete cascade on update cascade
 );
+create index services_hostid_i on s$services(host_id);
 
 create table s$ressources(
 	serv_id		int(32) unsigned not null,
@@ -121,6 +163,8 @@ create table s$ressources(
 	constraint fk_services_ressources_servid foreign key(serv_id) references s$services(id)   on delete cascade on update cascade,
 	constraint fk_services_ressources_resid  foreign key(res_id)  references c$ressources(id) on delete cascade on update cascade
 );
+create index services_ressources_servid_i on s$ressources(serv_id);
+create index services_ressources_resid_i on s$ressources(res_id);
 
 create table s$event_factory(
 	serv_id		int(32) unsigned,
@@ -133,6 +177,8 @@ create table s$event_factory(
 	constraint fk_services_factory_servid foreign key(serv_id) references s$services(id)   on delete cascade on update cascade,
 	constraint fk_services_factory_resid  foreign key(res_id)  references c$ressources(id) on delete cascade on update cascade
 );
+create index services_factory_servid_i on s$event_factory(serv_id);
+create index services_factory_resvid_i on s$event_factory(res_id);
 
 create table s$res_events(
 	id		int(32) unsigned auto_increment,
@@ -148,6 +194,7 @@ create table s$res_events(
 	constraint services_res_events_pk primary key(id),
 	constraint fk_services_events_ressources foreign key(serv_id, res_id) references s$ressources(serv_id, res_id) on delete cascade on update cascade
 );
+create index services_events_ressources_i on s$res_events(serv_id, res_id);
 
 create table s$log_events(
 	id		int(32) unsigned auto_increment,
@@ -162,6 +209,7 @@ create table s$log_events(
 	constraint unique index services_log_events_u(serv_id,source_name,date_field,line_no),
 	constraint fk_services_log_events_servid foreign key(serv_id) references s$services(id)   on delete cascade on update cascade
 );
+create index services_log_events_servid_i on s$log_events(serv_id);
 
 create table s$sockets (
 	serv_id		int(32) unsigned  not null,
@@ -230,6 +278,7 @@ create table a$apps(
 	constraint unique index apps_name_u(name),
 	constraint fk_apps_group foreign key(group_id) references g$groups(id) on delete set null on update cascade
 );
+create index apps_group_i on a$apps(group_id);
 
 create table a$services(
 	app_id		int(32) unsigned not null,
@@ -238,6 +287,7 @@ create table a$services(
 	constraint fk_apps_services_app foreign key(app_id) references a$apps(id) on delete cascade on update cascade,
 	constraint fk_apps_services_serv foreign key(serv_id) references s$services(id) on delete cascade on update cascade
 );
+create index apps_services_serv on a$services(serv_id);
 
 create table p$roles(
 	id		int(32) unsigned auto_increment,
@@ -263,6 +313,7 @@ create table p$team_properties (
 	constraint fk_team_properties_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
 	constraint fk_team_properties_prop foreign key(prop_id) references c$properties(id) on delete cascade on update cascade
 );
+create index team_properties_prop_i on p$team_properties(prop_id);
 
 create table p$domains (
 	domain_id	int(32) unsigned not null,
@@ -274,6 +325,8 @@ create table p$domains (
 	constraint fk_perm_domains_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
 	constraint fk_perm_domains_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
 );
+create index perm_domains_team_i on p$domains(team_id);
+create index perm_domains_role_i on p$domains(role_id);
 
 create table p$hosts (
 	host_id		int(32) unsigned not null,
@@ -285,17 +338,21 @@ create table p$hosts (
 	constraint fk_perm_hosts_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
 	constraint fk_perm_hosts_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
 );
+create index perm_hosts_team_i on p$hosts(team_id);
+create index perm_hosts_role_i on p$hosts(role_id);
 
 create table p$services (
 	serv_id		int(32) unsigned not null,
 	team_id		int(32) unsigned not null,
 	role_id		int(32) unsigned not null,
 	alert		boolean,
-	constraint perm_services_pk primary key(team_id,role_id),
+	constraint perm_services_pk primary key(serv_id,team_id,role_id),
 	constraint fk_perm_services_serv foreign key(serv_id) references s$services(id) on delete cascade on update cascade,
 	constraint fk_perm_services_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
 	constraint fk_perm_services_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
 );
+create index perm_services_team_i on p$services(team_id);
+create index perm_services_role_i on p$services(role_id);
 
 create table p$groups (
 	group_id	int(32) unsigned not null,
@@ -307,6 +364,8 @@ create table p$groups (
 	constraint fk_perm_groups_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
 	constraint fk_perm_groups_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
 );
+create index perm_groups_team_i on p$groups(team_id);
+create index perm_groups_role_i on p$groups(role_id);
 
 create table p$apps (
 	app_id		int(32) unsigned not null,
@@ -318,6 +377,9 @@ create table p$apps (
 	constraint fk_perm_apps_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade,
 	constraint fk_perm_apps_role foreign key(role_id) references p$roles(id) on delete cascade on update cascade
 );
+create index perm_apps_team_i on p$apps(team_id);
+create index perm_apps_role_i on p$apps(role_id);
+
 
 create or replace view p$hosts_direct_teams as
 select h.host_id, h.team_id, h.role_id, h.alert
@@ -376,6 +438,18 @@ create table u$users (
 	constraint unique index users_name_u(username)
 );
 
+create table u$tokens (
+	id		int(32) unsigned auto_increment,
+	user_id		int(32) unsigned not null,
+	keyname		varchar(256) not null,
+	passhash	varchar(512) not null,
+	created		timestamp default current_timestamp,
+	constraint tokens_pk primary key(id),
+	constraint unique index tokens_name_u(keyname),
+	constraint fk_tokens_user 	foreign key(user_id) references u$users(id) on delete cascade on update cascade
+);
+create index tokens_user_i on u$tokens(user_id);
+
 create table u$teams (
 	user_id		int(32) unsigned not null,
 	team_id		int(32) unsigned not null,
@@ -383,6 +457,7 @@ create table u$teams (
 	constraint fk_users_teams_user foreign key(user_id) references u$users(id) on delete cascade on update cascade,
 	constraint fk_users_teams_team foreign key(team_id) references p$teams(id) on delete cascade on update cascade
 );
+create index users_teams_team_i on u$teams(team_id);
 
 create table u$properties (
 	user_id		int(32) unsigned not null,
@@ -392,6 +467,7 @@ create table u$properties (
 	constraint fk_users_properties_user foreign key(user_id) references u$users(id) on delete cascade on update cascade,
 	constraint fk_users_properties_prop foreign key(prop_id) references c$properties(id) on delete cascade on update cascade
 );
+create index users_properties_prop_i on u$properties(prop_id);
 
 create or replace view p$users_all_hosts as
 select ut.user_id, th.host_id, th.role_id
@@ -505,29 +581,29 @@ select s.id as serv_id, p.prop_id, p.value
    and p.user_id=t.user_id
    and t.team_id=hdt.team_id;
 
-insert into c$domains(name) values ("Production"),("Qualification"),("Testing"),("Developpement");
+insert into c$domains(name) values ('Production'),('Qualification'),('Testing'),('Developpement');
 insert into c$agents(host,port) values('localhost',9080);
-insert into c$event_types(name) values ("Critical"),("Error"),("Warning"),("Notice"),("Information");
+insert into c$event_types(name) values ('Critical'),('Error'),('Warning'),('Notice'),('Information');
 insert into h$event_factory(res_type, event_type, property, oper, value) values ('disk_usage', 3, 'pctfree', '<', 25),('disk_usage', 2, 'pctfree', '<', 5),('disk_usage', 2, 'ipctfree', '<', 5),('disk_usage', 3, 'ipctfree', '<', 25),('cpu_usage', 5, 'user', '>', 90);
-insert into c$properties(name) values ("email");
-insert into u$users(username) values ("public");
-insert into u$users(username,passhash) values ("admin",'$2y$10$GG4XXB9YGIZYZ6anAAZN1etXSldQqb1v7uO8p4H1r4eFOdkk80znW');
-insert into s$types(name) values ("database"),("web"),("system");
-insert into p$teams(name, superadmin) values ("admin", true);
-insert into p$teams(name) values ("public"),("Production dba"),("Qualification dba"),("Testing dba"),("Developpement dba"),("Production sysadmin"),("Qualification sysadmin"),("Testing sysadmin"),("Developpement sysadmin"),("Production webadmin"),("Qualification webadmin"),("Testing webadmin"),("Developpement webadmin");
-insert into p$roles(name) values ("hostadmin");
+insert into c$properties(name) values ('email');
+insert into u$users(username) values ('public');
+insert into u$users(username,passhash) values ('admin','$2y$10$GG4XXB9YGIZYZ6anAAZN1etXSldQqb1v7uO8p4H1r4eFOdkk80znW');
+insert into s$types(name) values ('database'),('web'),('system');
+insert into p$teams(name, superadmin) values ('admin', true);
+insert into p$teams(name) values ('public'),('Production dba'),('Qualification dba'),('Testing dba'),('Developpement dba'),('Production sysadmin'),('Qualification sysadmin'),('Testing sysadmin'),('Developpement sysadmin'),('Production webadmin'),('Qualification webadmin'),('Testing webadmin'),('Developpement webadmin');
+insert into p$roles(name) values ('hostadmin');
 insert into p$roles(name, serv_type_id)
-select "dba" as name, t.id serv_type_id
+select 'dba' as name, t.id serv_type_id
   from s$types t
- where t.name="database"
+ where t.name='database'
 union
-select "sysadmin" as name, t.id serv_type_id
+select 'sysadmin' as name, t.id serv_type_id
   from s$types t
- where t.name="system"
+ where t.name='system'
 union
-select "webadmin" as name, t.id serv_type_id
+select 'webadmin' as name, t.id serv_type_id
   from s$types t
- where t.name="web";
+ where t.name='web';
 insert into u$teams(user_id, team_id)
 select u.id as user_id, t.id as team_id
   from u$users u, p$teams t
@@ -536,74 +612,74 @@ select u.id as user_id, t.id as team_id
 insert into p$domains(domain_id, team_id, role_id, alert)
 select d.id as domain_id, t.id as team_id, r.id as role_id, true
   from c$domains d, p$teams t, p$roles r
- where d.name="Production"
-   and t.name="Production dba"
-   and r.name="dba"
+ where d.name='Production'
+   and t.name='Production dba'
+   and r.name='dba'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id, true
   from c$domains d, p$teams t, p$roles r
- where d.name="Production"
-   and t.name="Production webadmin"
-   and r.name="webadmin"
+ where d.name='Production'
+   and t.name='Production webadmin'
+   and r.name='webadmin'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id, true
   from c$domains d, p$teams t, p$roles r
- where d.name="Production"
-   and t.name="Production sysadmin"
-   and r.name in ("sysadmin", "hostadmin");
+ where d.name='Production'
+   and t.name='Production sysadmin'
+   and r.name in ('sysadmin', 'hostadmin');
 
 insert into p$domains(domain_id, team_id, role_id)
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Developpement"
-   and t.name="Developpement dba"
-   and r.name="dba"
+ where d.name='Developpement'
+   and t.name='Developpement dba'
+   and r.name='dba'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Qualification"
-   and t.name="Qualification dba"
-   and r.name="dba"
+ where d.name='Qualification'
+   and t.name='Qualification dba'
+   and r.name='dba'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Testing"
-   and t.name="Testing dba"
-   and r.name="dba"
+ where d.name='Testing'
+   and t.name='Testing dba'
+   and r.name='dba'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Developpement"
-   and t.name="Developpement webadmin"
-   and r.name="webadmin"
+ where d.name='Developpement'
+   and t.name='Developpement webadmin'
+   and r.name='webadmin'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Qualification"
-   and t.name="Qualification webadmin"
-   and r.name="webadmin"
+ where d.name='Qualification'
+   and t.name='Qualification webadmin'
+   and r.name='webadmin'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Testing"
-   and t.name="Testing webadmin"
-   and r.name="webadmin"
+ where d.name='Testing'
+   and t.name='Testing webadmin'
+   and r.name='webadmin'
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Developpement"
-   and t.name="Developpement sysadmin"
-   and r.name in ("sysadmin", "hostadmin")
+ where d.name='Developpement'
+   and t.name='Developpement sysadmin'
+   and r.name in ('sysadmin', 'hostadmin')
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Qualification"
-   and t.name="Qualification sysadmin"
-   and r.name in ("sysadmin", "hostadmin")
+ where d.name='Qualification'
+   and t.name='Qualification sysadmin'
+   and r.name in ('sysadmin', 'hostadmin')
 union
 select d.id as domain_id, t.id as team_id, r.id as role_id
   from c$domains d, p$teams t, p$roles r
- where d.name="Testing"
-   and t.name="Testing sysadmin"
-   and r.name in ("sysadmin", "hostadmin");
+ where d.name='Testing'
+   and t.name='Testing sysadmin'
+   and r.name in ('sysadmin', 'hostadmin');
 commit;
