@@ -45,16 +45,16 @@ create table c$aggregate_config(
 	delay_ah	int(32) unsigned not null default 2,
 	delay_ad	int(32) unsigned not null default 1,
 	retention_d	int(32) unsigned not null default 14,
-	retention_am	int(32) unsigned not null default 120,
-	retention_ah	int(32) unsigned not null default 1826,
+	retention_am	int(32) unsigned not null default 60,
+	retention_ah	int(32) unsigned not null default 730,
 	retention_ad	int(32) unsigned not null default 0,
 	constraint c$aggregate_config_pk primary key(name)
 );
 insert into c$aggregate_config(name) values('default');
 
 create or replace view c$data_tables as
-select def.data_type, t.table_name as 'data_table', m.table_name as 'aggregate_min', h.table_name as 'aggregate_hour', d.table_name as 'aggregate_day' 
-  from (select distinct data_type, concat('d$',data_type) as data_table, concat('am$',data_type) as am_table, concat('ah$',data_type) as ah_table, concat('ad$',data_type) as ad_table 
+select def.data_type, def.drive, t.table_name as 'data_table', m.table_name as 'aggregate_min', h.table_name as 'aggregate_hour', d.table_name as 'aggregate_day' 
+  from (select distinct data_type, concat('d$',data_type) as data_table, concat('am$',data_type) as am_table, concat('ah$',data_type) as ah_table, concat('ad$',data_type) as ad_table, concat(substr(origin,1,4),'_id') as drive
 	  from c$ressources) def
 left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) t on t.table_name=def.data_table
 left join (select table_name from information_schema.tables where TABLE_SCHEMA=DATABASE()) h on h.table_name=def.ah_table

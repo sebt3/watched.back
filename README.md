@@ -39,16 +39,14 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
   * email
 
 ## TODO
-- Insert alerter name in c$properties
-- Detect missing Host and Agent
+- Detect missing Host and Agent and build and availability table for them
+- build aggregate on availability of : service, host, agent and backend
 - Code improvement (agentClient.cpp:38)
 - Request for an updated API for known agents at configured interval (agentManager.cpp:41)
 - Add support for alert on Host failed (alerter.cpp:186)
 - Add support for alert on agent failed (alerter.cpp:188)
 - Add a configuration option for agents updates (backend.cpp:23)
 - Support the since flag (servicesClient.cpp:12)
-- Add support for ad$ tables (statAggregator.cpp)
-- Update aggregate tables with missing columns (statAggregator.cpp:69), (statAggregator.cpp:76)
-- Add foreign keys on aggregate table to (s|h)$ressources (statAggregator.cpp:89), (statAggregator.cpp:99)
+- Update aggregate tables with missing columns (statAggregator.cpp:78), (statAggregator.cpp:85), (statAggregator.cpp:91)
 - add support for sigusr1 which reload configs et reopen log
 

@@ -39,7 +39,11 @@ void agentClient::createRessources() {
 		std::string ref = (*i)["get"]["responses"]["200"]["schema"]["items"]["$ref"].asString();
 		std::string tbl	= ref.substr(ref.rfind("/")+1);
 		if (! haveRessource(origin, name)) {
-			mysqlpp::Query query = db->query("insert into c$ressources(name, origin, data_type) values('"+name+"','"+origin+"','"+tbl+"')");
+			mysqlpp::Query query = db->query("insert into c$ressources(name, origin, data_type) values(%0q:name,%1q:ori,%2q:tbl)");
+			query.parse();
+			query.template_defaults["name"] = name.c_str();
+			query.template_defaults["ori"] = origin.c_str();
+			query.template_defaults["tbl"] = tbl.c_str();
 			myqExec(query, "agentClient::createRessources", "Failed to insert ressource")
 		}
 		uint32_t resid = getRessourceId(origin, name);
@@ -48,10 +52,16 @@ void agentClient::createRessources() {
 		if (resid==0) continue;
 		if (i->isMember("x-service")) {
 			servid = getService(hostid, (*i)["x-service"].asString());
-			mysqlpp::Query q = db->query("insert into s$ressources(serv_id,res_id) values ("+std::to_string(servid)+","+std::to_string(resid)+") ON DUPLICATE KEY UPDATE res_id=res_id");
+			mysqlpp::Query q = db->query("insert into s$ressources(serv_id,res_id) values (%0:srv,%1:res) ON DUPLICATE KEY UPDATE res_id=res_id");
+			q.parse();
+			q.template_defaults["srv"] = servid;
+			q.template_defaults["res"] = resid;
 			myqExec(q, "agentClient::createRessources", "Failed to insert s$ressources")
 		} else {
-			mysqlpp::Query q = db->query("insert into h$ressources(host_id,res_id) values ("+std::to_string(hostid)+","+std::to_string(resid)+") ON DUPLICATE KEY UPDATE res_id=res_id");
+			mysqlpp::Query q = db->query("insert into h$ressources(host_id,res_id) values (%0:host,%1:res) ON DUPLICATE KEY UPDATE res_id=res_id");
+			q.parse();
+			q.template_defaults["host"] = hostid;
+			q.template_defaults["res"] = resid;
 			myqExec(q, "agentClient::createRessources", "Failed to insert h$ressources")
 		}
 
@@ -161,8 +171,9 @@ void agentClient::init() {
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { l->error("agentClient::init", "Failed to get a connection from the pool!"); return; }
-	mysqlpp::Query query = db->query();
-	query << "select host, port, pool_freq, use_ssl from c$agents where id=" << id;
+	mysqlpp::Query query = db->query("select host, port, pool_freq, use_ssl from c$agents where id=%0:id");
+	query.parse();
+	query.template_defaults["id"] = id;
 	try {
 	if (mysqlpp::StoreQueryResult res = query.store()) {
 		mysqlpp::Row row = *res.begin(); // there should be only one row anyway

@@ -25,14 +25,15 @@ void	servicesClient::collectLog() {
 			t+=(*j)["text"].asString()+"\n";
 			uint32_t event_type_id = getEventType((*j)["level"].asString());
 			if (maxlvl<event_type_id) maxlvl=event_type_id;
-			mysqlpp::Query q = db->query();
-			q << "insert into s$log_events(serv_id,timestamp,event_type,source_name,date_field,line_no,text) values (" 
-				<< serv_id << "," << (*j)["timestamp"].asDouble() << ","
-				<< event_type_id << "," << mysqlpp::quote << (*j)["source"].asString() << "," 
-				<< mysqlpp::quote << (*j)["date_mark"].asString() << ","
-				<< (*j)["line_no"].asUInt() << "," << mysqlpp::quote << (*j)["text"].asString()
-				<< ") ON DUPLICATE KEY UPDATE text="
-				<< mysqlpp::quote << (*j)["text"].asString();
+			mysqlpp::Query q = db->query("insert into s$log_events(serv_id, timestamp, event_type, source_name, date_field, line_no, text) values (%0:srv, %1:ts, %2:et, %3q:src, %4q:dm, %5:ln, %6q:txt) ON DUPLICATE KEY UPDATE text=%6q:txt");
+			q.parse();
+			q.template_defaults["srv"] = serv_id;
+			q.template_defaults["ts"]  = (*j)["timestamp"].asDouble();
+			q.template_defaults["et"]  = event_type_id;
+			q.template_defaults["src"] = (*j)["source"].asCString();
+			q.template_defaults["dm"]  = (*j)["date_mark"].asCString();
+			q.template_defaults["ln"]  = (*j)["line_no"].asUInt();
+			q.template_defaults["txt"] = (*j)["text"].asCString();
 			myqExec(q, "servicesClient::collectLog", "Failed to insert a log entry")
 		}
 		if (maxlvl>0)
@@ -65,44 +66,40 @@ void	servicesClient::collect() {
 
 		// adding process
 		for (Json::Value::iterator j = (*i)["process"].begin();j!=(*i)["process"].end();j++) {
-			std::string querystr;
+			mysqlpp::Query q = db->query("insert into s$process(serv_id, name, full_path, cwd, username, pid, status, timestamp) values (%0:srv, %1q:name, %2q:path, %3q:cwd, %4q:user, %5:pid, %6q:stts, %7:ts) ON DUPLICATE KEY UPDATE full_path=%2q:path, cwd=%3q:cwd, username=%4q:user, pid=%5:pid, status=%6q:stts");
+			q.parse();
+			q.template_defaults["srv"]  = serv_id;
+			q.template_defaults["name"] = (*j)["name"].asCString();
+			q.template_defaults["path"] = (*j)["full_path"].asCString();
+			q.template_defaults["cwd"]  = (*j)["cwd"].asCString();
+			q.template_defaults["user"] = (*j)["username"].asCString();
+			q.template_defaults["stts"] = (*j)["status"].asCString();
+			q.template_defaults["ts"]   = fp_ms.count();
 			if ((*j)["status"].asString() == "ok") {
 				ok++;
-				querystr = "insert into s$process(serv_id,name,full_path,cwd,username,pid,status,timestamp) values ("+std::to_string(serv_id)+
-					",'"+(*j)["name"].asString()+"','"+(*j)["full_path"].asString()+
-					"','"+(*j)["cwd"].asString()+"','"+(*j)["username"].asString()+
-					"',"+(*j)["pid"].asString()+",'"+(*j)["status"].asString()+
-					"',"+std::to_string(fp_ms.count())+") ON DUPLICATE KEY UPDATE full_path='"+(*j)["full_path"].asString()+
-					"',cwd='"+(*j)["cwd"].asString()+"',username='"+(*j)["username"].asString()+
-					"',pid="+(*j)["pid"].asString()+",status='"+(*j)["status"].asString()+"',timestamp="+std::to_string(fp_ms.count());
+				q.template_defaults["pid"]  = (*j)["pid"].asInt();
 			} else {
-				if (!haveProcessStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString())) nfailed++;
+				if (!haveProcessStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString()))
+					nfailed++;
 				failed++;
-				querystr = "insert into s$process(serv_id,name,full_path,cwd,username,pid,status,timestamp) values ("+std::to_string(serv_id)+
-					",'"+(*j)["name"].asString()+"','"+(*j)["full_path"].asString()+
-					"','"+(*j)["cwd"].asString()+"','"+(*j)["username"].asString()+
-					"',0,'"+(*j)["status"].asString()+
-					"',"+std::to_string(fp_ms.count())+") ON DUPLICATE KEY UPDATE full_path='"+(*j)["full_path"].asString()+
-					"',pid=0,status='"+(*j)["status"].asString()+"',timestamp="+std::to_string(fp_ms.count());
+				q.template_defaults["pid"]  = 0;
 			}
-			mysqlpp::Query q = db->query(querystr);
 			myqExec(q, "servicesClient::collect", "Failed to insert process")
 		}
 
 		// adding sockets
 		for (Json::Value::iterator j = (*i)["sockets"].begin();j!=(*i)["sockets"].end();j++) {
-			//std::cout << (*j)["name"] << std::endl;
 			if ((*j)["status"].asString() != "ok") {
-				if (!haveSocketStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString())) nfailed++;
-
+				if (!haveSocketStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString()))
+					nfailed++;
 				failed++;
 			} else	ok++;
-
-			mysqlpp::Query q = db->query(
-				"insert into s$sockets(serv_id,name,status,timestamp) values ("+std::to_string(serv_id)+
-				",'"+(*j)["name"].asString()+"','"+(*j)["status"].asString()+
-				"',"+std::to_string(fp_ms.count())+") ON DUPLICATE KEY UPDATE status='"+(*j)["status"].asString()+
-				"',timestamp="+std::to_string(fp_ms.count()));
+			mysqlpp::Query q = db->query("insert into s$sockets(serv_id, name, status, timestamp) values (%0:srv, %1q:name, %2q:stts, %3:ts) ON DUPLICATE KEY UPDATE status=%2q:stts");
+			q.parse();
+			q.template_defaults["srv"]  = serv_id;
+			q.template_defaults["name"] = (*j)["name"].asCString();
+			q.template_defaults["stts"] = (*j)["status"].asCString();
+			q.template_defaults["ts"]   = fp_ms.count();
 			myqExec(q, "servicesClient::collect", "Failed to insert socket")
 		}
 		if (nfailed>0) {
@@ -111,23 +108,28 @@ void	servicesClient::collect() {
 		}
 
 		// updating service type
-		mysqlpp::Query t = db->query(
-			"update s$services set type_id="+std::to_string(type_id)+" where id="+std::to_string(serv_id)
-		);
+		mysqlpp::Query t = db->query("update s$services set type_id=%0:t where id=%1:s");
+		t.parse();
+		t.template_defaults["t"] = type_id;
+		t.template_defaults["s"] = serv_id;
 		myqExec(t, "servicesClient::collect", "Failed to update type")
 
 		// updating status
-		mysqlpp::Query p = db->query(
-			"insert into s$history(serv_id,timestamp,failed,missing,ok) values ("+std::to_string(serv_id)+	","+std::to_string(fp_ms.count())+","+std::to_string(failed)+",0,"+std::to_string(ok)+") ON DUPLICATE KEY UPDATE failed="+std::to_string(failed)+",ok="+std::to_string(ok)
-		);
+		mysqlpp::Query p = db->query("insert into s$history(serv_id, timestamp, failed, missing, ok) values (%0:s, %1:t, %2:f, 0, %3:o) ON DUPLICATE KEY UPDATE failed=%2:f, ok=%3:o");
+		p.parse();
+		p.template_defaults["s"] = serv_id;
+		p.template_defaults["t"] = fp_ms.count();
+		p.template_defaults["f"] = failed;
+		p.template_defaults["o"] = ok;
 		myqExec(p, "servicesClient::collect", "Failed to insert history")
 	}
 
 	// update history for missing service on known hosts
 	for (std::set<uint32_t>::iterator i = hosts.begin();i!=hosts.end();i++) {
-		mysqlpp::Query p = db->query(
-			"insert into s$history select s.id as serv_id, "+std::to_string(fp_ms.count())+" as timestamp, 0 as failed, ifnull(p.cnt,0)+ifnull(o.cnt,0) as missing, 0 as ok from s$services s left join (select serv_id, count(*) as cnt from s$process group by serv_id) p on s.id=p.serv_id left join (select serv_id, count(*) as cnt from s$sockets group by serv_id) o on s.id=o.serv_id where s.id not in (select serv_id from s$history where timestamp>="+std::to_string(fp_ms.count())+") and host_id="+std::to_string(*i)
-		);
+		mysqlpp::Query p = db->query("insert into s$history select s.id as serv_id, %0:t as timestamp, 0 as failed, ifnull(p.cnt,0)+ifnull(o.cnt,0) as missing, 0 as ok from s$services s left join (select serv_id, count(*) as cnt from s$process group by serv_id) p on s.id=p.serv_id left join (select serv_id, count(*) as cnt from s$sockets group by serv_id) o on s.id=o.serv_id where s.id not in (select serv_id from s$history where timestamp>=%0:t) and host_id=%1:h");
+		p.parse();
+		p.template_defaults["t"] = fp_ms.count();
+		p.template_defaults["h"] = *i;
 		myqExec(p, "servicesClient::collect", "Failed to insert missing history")
 	}
 

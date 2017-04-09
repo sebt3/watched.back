@@ -55,6 +55,7 @@ public:
 	void	sendServRessource(uint32_t p_serv_id, uint32_t p_res_id, std::shared_ptr<res_event> p_event, double p_current);
 	void	sendHostRessource(uint32_t p_host_id, uint32_t p_res_id, std::shared_ptr<res_event> p_event, double p_current);
 private:
+	void	addAlerter(const std::string p_name);
 	void	send(alerter::levels p_lvl, const std::string p_alerter, const std::string p_dest, const std::string p_title, const std::string p_message);
 	Json::Value*				cfg;
 	std::map< std::string,std::shared_ptr<alerter> >	alerters;
