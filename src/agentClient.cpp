@@ -155,12 +155,52 @@ void agentClient::createTables() {
 	mysqlpp::Connection::thread_end();
 }
 
+void agentClient::alertFailed() {
+	// TODO: alert on agent failure
+}
+
+void agentClient::updateCounter(uint32_t p_ok, uint32_t p_missing, uint32_t p_parse) {
+	uint32_t fail = 0;
+	uint32_t mis = p_missing;
+	if ((p_missing != 0 || p_parse != 0) && p_ok == 0) {
+		alertFailed();
+		fail = p_missing;
+		mis  = 0;
+	}
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("agentClient::createRessources", "Failed to get a connection from the pool!"); return; }
+
+	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
+	mysqlpp::Query query = db->query("insert into agt$history(agt_id, timestamp, failed, missing, parse, ok) values(%0:id,%1:ts,%2:fa,%3:mi,%4:pa,%5:ok) on duplicate key update failed=%2:fa, missing%3:mi, parse=%4:pa, ok=%5:ok");
+	query.parse();
+	query.template_defaults["id"] = id;
+	query.template_defaults["ts"] = fp_ms.count();
+	query.template_defaults["fa"] = fail;
+	query.template_defaults["mi"] = mis;
+	query.template_defaults["pa"] = p_parse;
+	query.template_defaults["ok"] = p_ok;
+	myqExec(query, "agentClient::updateCounter", "Failed to update status")
+
+	mysqlpp::Connection::thread_end();
+}
+
+
 void agentClient::updateApi() {
 	if (!ready) {
 		init();
 		return; // API update will occur during init
 	}
-	if(!client->getJSON("/api/swagger.json", api)) return;
+	uint32_t ok;
+	uint32_t missing;
+	uint32_t parse;
+	client->resetCount(&ok, &missing, &parse);
+	if(ok != 0 || missing != 0 || parse != 0)
+		updateCounter(ok, missing, parse);
+	if(!client->getJSON("/api/swagger.json", api)) {
+		alertFailed();
+		return;
+	}
 	createRessources();
 	createTables();
 	ressources.erase(std::remove_if(ressources.begin(), ressources.end(), [this](std::shared_ptr<ressourceClient> x) {
@@ -214,8 +254,6 @@ void agentClient::init() {
 }
 
 void agentClient::startThread() {
-	if (!api.isMember("paths"))
-		updateApi();
 	if (!ready || active) return;
 	active=true;
 	my_thread = std::thread ([this](){

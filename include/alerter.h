@@ -43,6 +43,8 @@ protected:
 	std::string	getRessourceName(uint32_t p_res);
 	bool		haveHost(std::string p_host_name);
 	uint32_t	getHost(std::string p_host_name);
+	bool		haveBackend(std::string p_me, std::string p_cfg);
+	uint32_t	getBackend(std::string p_me, std::string p_cfg);
 	std::string	getHostName(uint32_t p_host_id);
 	bool		haveEventType(std::string p_event_type_name);
 	uint32_t	getEventType(std::string p_event_type_name);

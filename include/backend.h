@@ -74,7 +74,11 @@ public:
 	std::string request(std::string p_opt, std::string p_path);
 	bool getJSON(std::string p_path, Json::Value &result);
 	std::string baseURL() { return base_url; }
+	void resetCount(uint32_t *p_ok, uint32_t *p_failed, uint32_t *p_parse);
 private:
+	uint32_t ok;
+	uint32_t failed;
+	uint32_t parse;
 	bool use_ssl;
 	std::string base_url;
 	std::shared_ptr<SWHttpClient>  http;
@@ -192,6 +196,8 @@ public:
 private:
 	void	createTables();
 	void	createRessources();
+	void	updateCounter(uint32_t p_ok, uint32_t p_failed, uint32_t p_parse);
+	void	alertFailed();
 
 	bool				ready;
 	bool				active;
@@ -244,8 +250,8 @@ private:
  */
 class agentManager : public dbTools {
 public:
-	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), back_cfg(p_cfg), alert(p_alert) { }
-	void	init(Json::Value* p_aggregCfg);
+	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), back_cfg(p_cfg), alert(p_alert), back_id(0) { }
+	void	init(Json::Value* p_aggregCfg, std::string p_me, std::string p_cfgfile);
 	void	startThreads();
 	void	updateAgents();
 private:
@@ -253,6 +259,7 @@ private:
 	std::shared_ptr<statAggregator>				aggreg;
 	Json::Value* 						back_cfg;
 	std::shared_ptr<alerterManager>				alert;
+	int32_t							back_id;
 };
 }
 

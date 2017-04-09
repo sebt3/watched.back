@@ -30,7 +30,7 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
 - Compute aggregated data
 - Monitor ressources values and create event in the database if it cross configured limits
 - Collect service log and create log events in the database
-- Collect services status and update the database accordingly and historize
+- Collect services status, update the database accordingly and historize
 - Collect services metrics
 - Scalable : the work-load can be splitted in sub-groups of backend
 - Secure : support SSL  agents and can conect to mysql over SSL
@@ -44,7 +44,9 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
 - Code improvement (agentClient.cpp:38)
 - Add support for alert on Host failed (alerter.cpp:186)
 - Add support for alert on agent failed (alerter.cpp:188)
+- Add support for alert on backend failed (agentManager.cpp:89)
 - Support the since flag (servicesClient.cpp:12)
 - Update aggregate tables with missing columns (statAggregator.cpp:78), (statAggregator.cpp:85), (statAggregator.cpp:91)
 - add support for sigusr1 which reload configs et reopen log
+
 

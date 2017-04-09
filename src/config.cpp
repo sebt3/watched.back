@@ -7,7 +7,7 @@
 using namespace std;
 namespace watcheD {
 
-HttpClient::HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg, std::shared_ptr<log> p_l): use_ssl(false), base_url(p_baseurl), cfg(p_cfg), l(p_l) {
+HttpClient::HttpClient(std::string p_baseurl, bool p_use_ssl, Json::Value* p_cfg, std::shared_ptr<log> p_l): ok(0), failed(0), parse(0), use_ssl(false), base_url(p_baseurl), cfg(p_cfg), l(p_l) {
 	struct stat buffer;
 	std::string sslkey	= (*cfg)["SSL_key"].asString();
 	std::string sslcert	= (*cfg)["SSL_cert"].asString();
@@ -45,6 +45,13 @@ std::string HttpClient::request(std::string p_opt, std::string p_path) {
 	}
 	return ss.str();
 }
+
+void HttpClient::resetCount(uint32_t *p_ok, uint32_t *p_failed, uint32_t *p_parse) {
+	*p_ok	 = ok;		ok=0;
+	*p_failed= failed;	failed=0;
+	*p_parse = parse;	parse=0;
+}
+
 bool HttpClient::getJSON(std::string p_path, Json::Value &result) {
 	std::string resp;
 	std::stringstream ss;
@@ -56,6 +63,7 @@ bool HttpClient::getJSON(std::string p_path, Json::Value &result) {
 			resp = request("GET", p_path);
 		} catch (std::exception &e) {
 			l->warning("HttpClient::getJSON", "Failed to get "+base_url+p_path+" after a retry:"+e.what());
+			failed++;
 			return false;
 		}
 	}
@@ -64,8 +72,10 @@ bool HttpClient::getJSON(std::string p_path, Json::Value &result) {
 		ss >> result;
 	} catch(const Json::RuntimeError &er) {
 		l->warning("HttpClient::getJSON", "Json parse failed for url : "+base_url+p_path);
+		parse++;
 		return false;
 	}
+	ok++;
 	return true;
 }
 

@@ -9,6 +9,17 @@ create table c$agents (
 	constraint unique index agent_u (host, port)
 );
 
+create table agt$history (
+	agt_id		int(32) unsigned not null,
+	timestamp	double(20,4) unsigned not null,
+	failed		int(32) unsigned not null,
+	missing		int(32) unsigned not null,
+	parse		int(32) unsigned not null,
+	ok		int(32) unsigned not null,
+	constraint unique index agtHistory_u(agt_id, timestamp),
+	constraint fk_agtHistory_id foreign key(agt_id) references c$agents(id) on delete cascade on update cascade
+);
+
 create table c$ressources (
 	id		int(32)	unsigned auto_increment, 
 	name		varchar(256) not null,
@@ -288,6 +299,25 @@ create table a$services(
 	constraint fk_apps_services_serv foreign key(serv_id) references s$services(id) on delete cascade on update cascade
 );
 create index apps_services_serv on a$services(serv_id);
+
+
+create table b$backend(
+	id		int(32) unsigned not null auto_increment,
+	hostname	varchar(256) not null,
+	filename	varchar(256) not null,
+	constraint backend_pk primary key(id),
+	constraint unique index backend_u(hostname,filename)
+);
+
+create table b$history (
+	back_id		int(32) unsigned not null,
+	timestamp	double(20,4) unsigned not null,
+	failed		int(32) unsigned not null,
+	ok		int(32) unsigned not null,
+	constraint unique index backHistory_u(back_id, timestamp),
+	constraint fk_backHistory_id foreign key(back_id) references b$backend(id) on delete cascade on update cascade
+);
+
 
 create table p$roles(
 	id		int(32) unsigned auto_increment,

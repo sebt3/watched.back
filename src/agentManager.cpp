@@ -3,11 +3,37 @@
 #include <stdlib.h>
 #include <mysql++/exceptions.h>
 #include <fstream>
+#include <limits.h>
 
 namespace watcheD {
 
-void	agentManager::init(Json::Value* p_aggregCfg) {
-	// TODO: check for table agents and ressources, create (empty) if not found
+std::string getCurrentHost() {
+	struct addrinfo hints, *info;
+	std::string host = "";
+	int gai_result;
+	char ghost[1024];
+	memset(ghost,0,1024);
+	gethostname(ghost,1023);
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_CANONNAME;
+	if ((gai_result = getaddrinfo(ghost, "http", &hints, &info)) != 0)
+		return "";
+	host = info->ai_canonname;
+	freeaddrinfo(info);
+	return host;
+}
+
+void	agentManager::init(Json::Value* p_aggregCfg, std::string p_me, std::string p_cfgfile) {
+	std::string full = p_cfgfile;
+	std::string me = getCurrentHost();
+	if(me=="") me = p_me;
+	char buf[PATH_MAX + 1];
+	char *res = realpath(p_cfgfile.c_str(), buf);
+	if(res)
+		full = buf;
+	back_id = getBackend(me, full);
 	aggreg  = std::make_shared<statAggregator>(dbp, l, p_aggregCfg);
 	updateAgents();
 	std::this_thread::sleep_for(std::chrono::seconds(2)); // give enough time for the agentClients to be ready
@@ -46,6 +72,22 @@ void	agentManager::updateAgents() {
 		l->info("agentManager::updateAgents","Started "+std::to_string(count)+" agents");
 	} else l->error("agentManager::updateAgents","Could not query for agent list");
 	} myqCatch(query, "agentManager::updateAgents","Failed to get agents list")
+
+	// updating self status
+	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
+	mysqlpp::Query q = db->query("insert into b$history(back_id, timestamp, failed, ok) values(%0:id, %1:ts, 0, 1) on duplicate key update failed=0, ok=1");
+	q.parse();
+	q.template_defaults["id"] = back_id;
+	q.template_defaults["ts"] = fp_ms.count();
+	myqExec(q, "agentManager::updateAgents", "Failed to insert self status")
+
+	// looking for failed backend
+	mysqlpp::Query f = db->query("insert into b$history select back_id, %0:ts-300000 timestamp, 1 failed, 0 ok from (select max(timestamp) ts, back_id from b$history group by back_id) x where x.ts<%0:ts-600000");
+	f.parse();
+	f.template_defaults["ts"] = fp_ms.count();
+	myqExec(f, "agentManager::updateAgents", "Failed to insert failed backends status")
+	// TODO: alert for failed backend
+	
 	mysqlpp::Connection::thread_end();
 }
 

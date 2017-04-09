@@ -169,6 +169,52 @@ bool	dbTools::tableHasColumn(std::string p_name, std::string p_col) {
 	return false;
 }
 
+bool	dbTools::haveBackend(std::string p_me, std::string p_cfg) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::haveBackend", "Failed to get a connection from the pool!"); return false; }
+	mysqlpp::Query query = db->query("select count(*) from b$backend where hostname=%0q:h and filename=%1q:f");
+	query.parse();
+	query.template_defaults["h"] = p_me.c_str();
+	query.template_defaults["f"] = p_cfg.c_str();
+	try {
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]) > 0;
+	}
+	} myqCatch(query, "dbTools::haveBackend","Failed to get count for "+p_me+" - "+p_cfg)
+	mysqlpp::Connection::thread_end();
+	return false;
+}
+
+uint32_t	dbTools::getBackend(std::string p_me, std::string p_cfg) {
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("dbTools::getBackend", "Failed to get a connection from the pool!"); return false; }
+	if ( !haveBackend(p_me, p_cfg) ) {
+		mysqlpp::Query q = db->query("insert into b$backend(hostname,filename) values(%0q:h,%1q:f)");
+		q.parse();
+		q.template_defaults["h"] = p_me.c_str();
+		q.template_defaults["f"] = p_cfg.c_str();
+		myqExec(q, "dbTools::getBackend", "Failed to insert host")
+	}
+	mysqlpp::Query query = db->query("select id from b$backend where hostname=%0q:h and filename=%1q:f");
+	query.parse();
+	query.template_defaults["h"] = p_me.c_str();
+	query.template_defaults["f"] = p_cfg.c_str();
+	try {
+	if (mysqlpp::StoreQueryResult res = query.store()) {
+		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+		mysqlpp::Connection::thread_end();
+		return int(row[0]);
+		
+	}
+	} myqCatch(query, "dbTools::getBackend","Failed to get id for "+p_me+" - "+p_cfg)
+	mysqlpp::Connection::thread_end();
+	return 0;
+}
+
 bool	dbTools::haveHost(std::string p_host_name) {
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
@@ -207,7 +253,7 @@ uint32_t	dbTools::getHost(std::string p_host_name) {
 		return int(row[0]);
 		
 	}
-	} myqCatch(query, "dbTools::haveService","Failed to get id for "+p_host_name)
+	} myqCatch(query, "dbTools::getHost","Failed to get id for "+p_host_name)
 	mysqlpp::Connection::thread_end();
 	return 0;
 }

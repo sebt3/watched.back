@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
 	std::shared_ptr<alerterManager> alert	= std::make_shared<alerterManager>(db, l, cfg->getAlerter());
 	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db, l, alert, bcfg);
 	cfg->save();
-	ac->init(cfg->getAggregate());
+	ac->init(cfg->getAggregate(), argv[0], cfgfile);
 	cfg->save();
 	ac->startThreads();
 	
