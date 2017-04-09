@@ -66,7 +66,7 @@ void	servicesClient::collect() {
 
 		// adding process
 		for (Json::Value::iterator j = (*i)["process"].begin();j!=(*i)["process"].end();j++) {
-			mysqlpp::Query q = db->query("insert into s$process(serv_id, name, full_path, cwd, username, pid, status, timestamp) values (%0:srv, %1q:name, %2q:path, %3q:cwd, %4q:user, %5:pid, %6q:stts, %7:ts) ON DUPLICATE KEY UPDATE full_path=%2q:path, cwd=%3q:cwd, username=%4q:user, pid=%5:pid, status=%6q:stts");
+			mysqlpp::Query q = db->query("insert into s$process(serv_id, name, full_path, cwd, username, pid, status, timestamp) values (%0:srv, %1q:name, %2q:path, %3q:cwd, %4q:user, %5:pid, %6q:stts, %7:ts) ON DUPLICATE KEY UPDATE full_path=%2q:path, cwd=%3q:cwd, username=%4q:user, pid=%5:pid, status=%6q:stts, timestamp=%7:ts");
 			q.parse();
 			q.template_defaults["srv"]  = serv_id;
 			q.template_defaults["name"] = (*j)["name"].asCString();
@@ -94,7 +94,7 @@ void	servicesClient::collect() {
 					nfailed++;
 				failed++;
 			} else	ok++;
-			mysqlpp::Query q = db->query("insert into s$sockets(serv_id, name, status, timestamp) values (%0:srv, %1q:name, %2q:stts, %3:ts) ON DUPLICATE KEY UPDATE status=%2q:stts");
+			mysqlpp::Query q = db->query("insert into s$sockets(serv_id, name, status, timestamp) values (%0:srv, %1q:name, %2q:stts, %3:ts) ON DUPLICATE KEY UPDATE status=%2q:stts, timestamp=%3:ts");
 			q.parse();
 			q.template_defaults["srv"]  = serv_id;
 			q.template_defaults["name"] = (*j)["name"].asCString();

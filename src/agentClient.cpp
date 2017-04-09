@@ -172,7 +172,7 @@ void agentClient::updateCounter(uint32_t p_ok, uint32_t p_missing, uint32_t p_pa
 	if (!db) { l->error("agentClient::createRessources", "Failed to get a connection from the pool!"); return; }
 
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
-	mysqlpp::Query query = db->query("insert into agt$history(agt_id, timestamp, failed, missing, parse, ok) values(%0:id,%1:ts,%2:fa,%3:mi,%4:pa,%5:ok) on duplicate key update failed=%2:fa, missing%3:mi, parse=%4:pa, ok=%5:ok");
+	mysqlpp::Query query = db->query("insert into agt$history(agt_id, timestamp, failed, missing, parse, ok) values(%0:id,%1:ts,%2:fa,%3:mi,%4:pa,%5:ok) on duplicate key update failed=%2:fa, missing=%3:mi, parse=%4:pa, ok=%5:ok");
 	query.parse();
 	query.template_defaults["id"] = id;
 	query.template_defaults["ts"] = fp_ms.count();

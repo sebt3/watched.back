@@ -39,7 +39,7 @@ Complete instructions [here](https://sebt3.github.io/watched/doc/install/#build-
   * email
 
 ## TODO
-- Detect missing Host and Agent and build and availability table for them
+- Detect missing Host and build an availability table for them
 - build aggregate on availability of : service, host, agent and backend
 - Code improvement (agentClient.cpp:38)
 - Add support for alert on Host failed (alerter.cpp:186)
