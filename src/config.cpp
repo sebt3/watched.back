@@ -114,6 +114,10 @@ Config::Config(std::string p_fname) : fname(p_fname) {
 		data["backend"]["central_id"] = -1;
 		data["backend"]["central_id"].setComment(std::string("/*\t\tSelect the agents to collect based on their central_id [default: all agents (-1)] */"), Json::commentAfterOnSameLine);
 	}
+	if (! data["backend"].isMember("pool_freq")) {
+		data["backend"]["pool_freq"] = 5*60;
+		data["backend"]["pool_freq"].setComment(std::string("/*\t\tFrequency at which the backend pool the database for new agent (in seconds) */"), Json::commentAfterOnSameLine);
+	}
 }
 
 void 		Config::save() {

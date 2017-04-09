@@ -40,7 +40,8 @@ void	agentManager::updateAgents() {
 				agents[row[0]] = std::make_shared<agentClient>(row[0], dbp, l, alert, back_cfg);
 				agents[row[0]]->init();
 				count++;
-			} // TODO: request for an updated API for known agents
+			} else
+				agents[row[0]]->updateApi();
 		}
 		l->info("agentManager::updateAgents","Started "+std::to_string(count)+" agents");
 	} else l->error("agentManager::updateAgents","Could not query for agent list");

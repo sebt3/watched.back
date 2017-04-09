@@ -15,27 +15,8 @@ void	ressourceClient::init() {
 		typed   = "s$";
 		id_name = "serv_id";
 	}
-	std::stringstream insert;
-	insert << "insert into d$" << table << "(" << id_name << ", res_id";
-	for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
-		insert << ", " << j.key().asString();
-	}
-	insert << ") values (" << host_id << ", " << res_id;
-	int k=0;
-	for (Json::Value::iterator j = def->begin();j!=def->end();j++,k++)
-		insert << ", %" << k << ":" << j.key().asString();
-	insert << ") ON DUPLICATE KEY UPDATE ";
-	bool first=true;k=0;
-	for (Json::Value::iterator j = def->begin();j!=def->end();j++,k++) {
-		if(j.key().asString()=="timestamp") continue;
-		if(!first)
-			insert << ", ";
-		first=false;
-		insert << j.key().asString() << "=%" << k << ":" << j.key().asString();
-	}
-	
-	baseInsert = insert.str();
 
+	updateDefs(def);
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
 	if (!db) { l->error("ressourceClient::init", "Failed to get a connection from the pool!"); return; }
@@ -81,6 +62,33 @@ void	ressourceClient::init() {
 	}
 	} myqCatch(q2,"ressourceClient::init","Failed to get event factory for "+table)
 	mysqlpp::Connection::thread_end();
+}
+
+void ressourceClient::updateDefs(Json::Value *p_def) {
+	def = p_def;
+	std::string id_name = "host_id";
+	std::stringstream insert;
+	if (isService)
+		id_name = "serv_id";
+	insert << "insert into d$" << table << "(" << id_name << ", res_id";
+	for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
+		insert << ", " << j.key().asString();
+	}
+	insert << ") values (" << host_id << ", " << res_id;
+	int k=0;
+	for (Json::Value::iterator j = def->begin();j!=def->end();j++,k++)
+		insert << ", %" << k << ":" << j.key().asString();
+	insert << ") ON DUPLICATE KEY UPDATE ";
+	bool first=true;k=0;
+	for (Json::Value::iterator j = def->begin();j!=def->end();j++,k++) {
+		if(j.key().asString()=="timestamp") continue;
+		if(!first)
+			insert << ", ";
+		first=false;
+		insert << j.key().asString() << "=%" << k << ":" << j.key().asString();
+	}
+	
+	baseInsert = insert.str();
 }
 
 double  ressourceClient::getSince() {

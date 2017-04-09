@@ -67,8 +67,10 @@ void agentClient::createRessources() {
 
 		bool found=false;
 		for (std::vector< std::shared_ptr<ressourceClient> >::iterator j=ressources.begin();j!=ressources.end();j++) {
-			if ( (*j)->getBaseUrl() == i.key().asString() )
+			if ( (*j)->getBaseUrl() == i.key().asString() ) {
 				found = true;
+				(*j)->updateDefs(&(api["definitions"][tbl]["properties"]));
+			}
 		}
 
 		if(!found && i->isMember("x-service")) {
@@ -161,6 +163,13 @@ void agentClient::updateApi() {
 	if(!client->getJSON("/api/swagger.json", api)) return;
 	createRessources();
 	createTables();
+	ressources.erase(std::remove_if(ressources.begin(), ressources.end(), [this](std::shared_ptr<ressourceClient> x) {
+		for (Json::Value::iterator i = api["paths"].begin();i!=api["paths"].end();i++) {
+			if (x->getBaseUrl() == i.key().asString())
+				return false;
+		}
+		return true;
+	}), ressources.end());
 	l->info("agentClient::updateApi", "Agent "+std::to_string(id)+"("+baseurl+"), API knowledge updated");
 }
 

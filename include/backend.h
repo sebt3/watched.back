@@ -140,11 +140,11 @@ private:
 class ressourceClient : public dbTools {
 public:
 	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client), alert(p_alert) { }
-	void	init();
-	void	collect();
+	void		init();
+	void		collect();
 	std::string	getBaseUrl() { return baseurl; }
-	void	setService() { isService = true; }
-
+	void		setService() { isService = true; }
+	void		updateDefs(Json::Value *p_def);
 private:
 	double  getSince();
 
