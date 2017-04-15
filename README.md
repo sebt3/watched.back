@@ -8,8 +8,8 @@ The watched backend collect all the performance metrics and services status from
 This project is based on the following projects :
 * [mysql++](https://tangentsoft.net/mysql++/)
 * [jsoncpp](https://github.com/open-source-parsers/jsoncpp)
-* [SimpleWebServer](https://github.com/eidheim/Simple-Web-Server) (itself based on Boost::asio)
-* [Boost](http://www.boost.org) version >= 1.54
+* [SimpleWebServer](https://github.com/sebt3/Simple-Web-Server)
+* [Asio](http://think-async.com/Asio/)
 * C++11 compatible compiler (gcc >=4.9, clang >=3.3)
 * Linux
 

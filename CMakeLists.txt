@@ -67,13 +67,14 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif()
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Boost 1.54.0 COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
+#find_package(Boost 1.54.0 COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
+find_package(Asio REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Jsoncpp REQUIRED)
 find_package(Mysqlpp REQUIRED)
 find_package(Lua 5.2 REQUIRED)
 include(${CMAKE_SOURCE_DIR}/cmake/Modules/systemdservice.cmake)
-include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+include_directories(SYSTEM ${MYSQLPP_INCLUDE_DIRS} ${JSONCPP_INCLUDE_DIR} ${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${LUA_INCLUDE_DIR} ${ASIO_INCLUDE_DIRS})
 
 ####
 ## Sources

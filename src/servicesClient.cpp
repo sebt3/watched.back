@@ -65,9 +65,9 @@ void	servicesClient::collect() {
 		hosts.insert(host_id);
 
 		// adding process
+		mysqlpp::Query q = db->query("insert into s$process(serv_id, name, full_path, cwd, username, pid, status, timestamp) values (%0:srv, %1q:name, %2q:path, %3q:cwd, %4q:user, %5:pid, %6q:stts, %7:ts) ON DUPLICATE KEY UPDATE full_path=%2q:path, cwd=%3q:cwd, username=%4q:user, pid=%5:pid, status=%6q:stts, timestamp=%7:ts");
+		q.parse();
 		for (Json::Value::iterator j = (*i)["process"].begin();j!=(*i)["process"].end();j++) {
-			mysqlpp::Query q = db->query("insert into s$process(serv_id, name, full_path, cwd, username, pid, status, timestamp) values (%0:srv, %1q:name, %2q:path, %3q:cwd, %4q:user, %5:pid, %6q:stts, %7:ts) ON DUPLICATE KEY UPDATE full_path=%2q:path, cwd=%3q:cwd, username=%4q:user, pid=%5:pid, status=%6q:stts, timestamp=%7:ts");
-			q.parse();
 			q.template_defaults["srv"]  = serv_id;
 			q.template_defaults["name"] = (*j)["name"].asCString();
 			q.template_defaults["path"] = (*j)["full_path"].asCString();
@@ -88,19 +88,19 @@ void	servicesClient::collect() {
 		}
 
 		// adding sockets
+		mysqlpp::Query q2 = db->query("insert into s$sockets(serv_id, name, status, timestamp) values (%0:srv, %1q:name, %2q:stts, %3:ts) ON DUPLICATE KEY UPDATE status=%2q:stts, timestamp=%3:ts");
+		q2.parse();
 		for (Json::Value::iterator j = (*i)["sockets"].begin();j!=(*i)["sockets"].end();j++) {
 			if ((*j)["status"].asString() != "ok") {
 				if (!haveSocketStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString()))
 					nfailed++;
 				failed++;
 			} else	ok++;
-			mysqlpp::Query q = db->query("insert into s$sockets(serv_id, name, status, timestamp) values (%0:srv, %1q:name, %2q:stts, %3:ts) ON DUPLICATE KEY UPDATE status=%2q:stts, timestamp=%3:ts");
-			q.parse();
-			q.template_defaults["srv"]  = serv_id;
-			q.template_defaults["name"] = (*j)["name"].asCString();
-			q.template_defaults["stts"] = (*j)["status"].asCString();
-			q.template_defaults["ts"]   = fp_ms.count();
-			myqExec(q, "servicesClient::collect", "Failed to insert socket")
+			q2.template_defaults["srv"]  = serv_id;
+			q2.template_defaults["name"] = (*j)["name"].asCString();
+			q2.template_defaults["stts"] = (*j)["status"].asCString();
+			q2.template_defaults["ts"]   = fp_ms.count();
+			myqExec(q2, "servicesClient::collect", "Failed to insert socket")
 		}
 		if (nfailed>0) {
 			std::string msg="Service "+i.key().asString()+" on "+(*i)["host"].asString()+" have "+std::to_string(failed)+" failed componant";

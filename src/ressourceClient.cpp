@@ -137,10 +137,10 @@ void	ressourceClient::collect() {
 	// Load that data into database
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("ressourceClient::collect", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query insertQuery = db->query();
 	insertQuery << baseInsert;
 	insertQuery.parse();
-	if (!db) { l->error("ressourceClient::collect", "Failed to get a connection from the pool!"); return; }
 	for (const Json::Value& line : data) {
 		// compare values to the factory
 		for (std::vector< std::shared_ptr<struct res_event> >::iterator it = event_factory.begin() ; it != event_factory.end(); ++it) {
