@@ -185,7 +185,7 @@ void	ressourceClient::collect() {
 						query.template_defaults["op"]   = e->oper;
 						query.template_defaults["val"]  = e->value;
 					}
-					myqExec(query, "ressourceClient::collect", "Update an event")
+					myqExec(query, "ressourceClient::collect", "Update an event for "+table+" ("+std::to_string(host_id)+","+std::to_string(res_id)+")")
 
 					if (found == 0) {
 						current_events[query.insert_id()] = std::make_shared<res_event>(*e);
@@ -220,16 +220,18 @@ void	ressourceClient::collect() {
 					query.parse();
 					query.template_defaults["name"] = line["timestamp"].asFloat();
 					query.template_defaults["id"]   = id;
-					myqExec(query, "ressourceClient::collect", "Update an event")
+					myqExec(query, "ressourceClient::collect", "Update an event for "+table+" ("+std::to_string(host_id)+","+std::to_string(res_id)+")")
 					current_events.erase(id);
 				}
 			}
 		}
 
 		// insert the value
-		for (Json::Value::iterator j = def->begin();j!=def->end();j++)
-			insertQuery.template_defaults[j.key().asCString()] = line[j.key().asString()].asFloat();
-		myqExec(insertQuery, "ressourceClient::collect", "Insert a value")
+		for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
+			std::string k = j.key().asString();
+			insertQuery.template_defaults[k.c_str()] = line[k.c_str()].asFloat();
+		}
+		myqExec(insertQuery, "ressourceClient::collect", "Insert a value in "+table+" ("+std::to_string(host_id)+","+std::to_string(res_id)+"): "+baseInsert)
 	}
 	mysqlpp::Connection::thread_end();
 }

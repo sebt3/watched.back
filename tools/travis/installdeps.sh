@@ -8,3 +8,10 @@ cd jsoncpp/build
 cmake ..
 make -j 4
 sudo make install
+cd ../..
+git clone https://github.com/chriskohlhoff/asio.git
+cd asio/asio
+sed -i 's/SUBDIRS = include src/SUBDIRS = include/g' Makefile.am
+sh autogen.sh
+./configure
+sudo make install
