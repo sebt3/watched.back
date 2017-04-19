@@ -5,6 +5,7 @@ dist: trusty
 
 compiler:
   - gcc
+  - clang
 
 addons:
   apt:
