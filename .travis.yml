@@ -10,10 +10,10 @@ compiler:
 addons:
   apt:
     sources:
-    - llvm-toolchain-precise
+    - llvm-toolchain-3.9
     - ubuntu-toolchain-r-test
     packages:
-    - clang-3.7
+    - clang-3.9
     - libboost1.55-all-dev
     - libmysql++-dev
     - libssl-dev
@@ -24,12 +24,12 @@ addons:
 
 before_script:
     - if [ "$CXX" = "g++" ]; then export CXX="g++-5" CC="gcc-5"; fi
-    - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
+    - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.9" CC="clang-3.9"; fi
     - ./tools/travis/installdeps.sh
 
 script:
     - if [ "$CXX" = "g++" ]; then export CXX="g++-5" CC="gcc-5"; fi
-    - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
+    - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.9" CC="clang-3.9"; fi
     - $CXX --version
     - mkdir build && cd build
     - cmake ..
