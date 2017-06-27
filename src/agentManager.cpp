@@ -69,7 +69,8 @@ void	agentManager::updateAgents() {
 			} else
 				agents[row[0]]->updateApi();
 		}
-		l->info("agentManager::updateAgents","Started "+std::to_string(count)+" agents");
+		if (count>0)
+			l->info("agentManager::updateAgents","Started "+std::to_string(count)+" agents");
 	} else l->error("agentManager::updateAgents","Could not query for agent list");
 	} myqCatch(query, "agentManager::updateAgents","Failed to get agents list")
 

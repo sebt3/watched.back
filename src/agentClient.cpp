@@ -194,6 +194,7 @@ void agentClient::updateApi() {
 	uint32_t ok;
 	uint32_t missing;
 	uint32_t parse;
+	std::unique_lock<std::mutex> locker(lock);
 	client->resetCount(&ok, &missing, &parse);
 	if(ok != 0 || missing != 0 || parse != 0)
 		updateCounter(ok, missing, parse);
@@ -253,15 +254,21 @@ void agentClient::init() {
 	updateApi();
 }
 
+void	agentClient::collect() {
+	std::unique_lock<std::mutex> locker(lock);
+	services->collect();
+	services->collectLog();
+	for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it)
+		(*it)->collect();
+}
+
 void agentClient::startThread() {
 	if (!ready || active) return;
 	active=true;
 	my_thread = std::thread ([this](){
 		while(this->active) {
-			services->collect();
-			services->collectLog();
-			for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it)
-				(*it)->collect();
+			collect();
+			l->notice("agentClient::thread", "agent id="+std::to_string(id)+" Waiting for "+std::to_string(pool_freq)+"s");
 			std::this_thread::sleep_for(std::chrono::seconds(pool_freq));
 		}
 	});

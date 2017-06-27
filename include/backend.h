@@ -198,6 +198,7 @@ private:
 	void	createRessources();
 	void	updateCounter(uint32_t p_ok, uint32_t p_failed, uint32_t p_parse);
 	void	alertFailed();
+	void	collect();
 
 	bool				ready;
 	bool				active;
@@ -211,6 +212,7 @@ private:
 	std::vector< std::shared_ptr<ressourceClient> >		ressources;
 	Json::Value* 			back_cfg;
 	std::shared_ptr<alerterManager> alert;
+	std::mutex			lock;
 };
 
 /*********************************
