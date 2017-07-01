@@ -143,12 +143,15 @@ private:
  */
 class ressourceClient : public dbTools {
 public:
-	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), def(p_def), client(p_client), alert(p_alert) { }
+	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), servName(""), def(p_def), client(p_client), alert(p_alert) { }
 	void		init();
 	void		collect();
+	void		parse(Json::Value *p_data);
 	std::string	getBaseUrl() { return baseurl; }
-	void		setService() { isService = true; }
+	std::string	getServName() { return servName; }
+	void		setService(std::string n) { servName=n; isService = true; }
 	void		updateDefs(Json::Value *p_def);
+	bool		isServiceSet() {return isService; };
 private:
 	double  getSince();
 
@@ -157,6 +160,7 @@ private:
 	uint32_t		res_id;
 	std::string		baseurl;
 	std::string		table;
+	std::string		servName;
 	Json::Value		*def;
 	std::string		baseInsert;
 	std::shared_ptr<HttpClient>				client;
@@ -166,28 +170,11 @@ private:
 };
 
 /*********************************
- * servicesClient
- */
-class servicesClient : public dbTools {
-public:
-	servicesClient(uint32_t p_agt_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client): dbTools(p_db, p_l), agt_id(p_agt_id), client(p_client), alert(p_alert) { }
-	void	init();
-	void	collect();
-	void	collectLog();
-private:
-	uint32_t		agt_id;
-	std::shared_ptr<HttpClient>	client;
-	std::shared_ptr<alerterManager> alert;
-	/*std::vector< std::shared_ptr<struct event> >		event_factory;
-	std::map<uint32_t, std::shared_ptr<struct event> >	current_events;*/
-};
-
-/*********************************
  * agentClient
  */
 class agentClient : public dbTools {
 public:
-	agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg);
+	agentClient(uint32_t p_id, std::shared_ptr< watcheD::dbPool > p_db, std::shared_ptr< watcheD::log > p_l, std::shared_ptr< watcheD::alerterManager > p_alert, Json::Value* p_cfg);
 	~agentClient();
 	void	init();
 	void	updateApi();
@@ -203,12 +190,12 @@ private:
 	bool				ready;
 	bool				active;
 	uint32_t			id;
+	double				since;
 	std::shared_ptr<HttpClient>	client;
 	std::string			baseurl;
 	Json::Value			api;
 	std::thread			my_thread;
 	uint32_t			pool_freq;
-	std::shared_ptr<servicesClient>	services;
 	std::vector< std::shared_ptr<ressourceClient> >		ressources;
 	Json::Value* 			back_cfg;
 	std::shared_ptr<alerterManager> alert;

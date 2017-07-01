@@ -6,7 +6,7 @@
 
 namespace watcheD {
 
-agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), ready(false), active(false), id(p_id), back_cfg(p_cfg),alert(p_alert) {
+agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), ready(false), active(false), id(p_id), since(0), back_cfg(p_cfg),alert(p_alert) {
 }
 
 agentClient::~agentClient() {
@@ -75,7 +75,7 @@ void agentClient::createRessources() {
 
 		if(!found && i->isMember("x-service")) {
 			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(servid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, alert, client);
-			rc->setService();
+			rc->setService((*i)["x-service"].asString());
 			rc->init();
 			ressources.push_back(rc);
 		} else if (!found) {
@@ -169,7 +169,7 @@ void agentClient::updateCounter(uint32_t p_ok, uint32_t p_missing, uint32_t p_pa
 	}
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("agentClient::createRessources", "Failed to get a connection from the pool!"); return; }
+	if (!db) { l->error("agentClient::updateCounter", "Failed to get a connection from the pool!"); return; }
 
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
 	mysqlpp::Query query = db->query("insert into agt$history(agt_id, timestamp, failed, missing, parse, ok) values(%0:id,%1:ts,%2:fa,%3:mi,%4:pa,%5:ok) on duplicate key update failed=%2:fa, missing=%3:mi, parse=%4:pa, ok=%5:ok");
@@ -247,19 +247,136 @@ void agentClient::init() {
 	mysqlpp::Connection::thread_end();
 	client = std::make_shared<HttpClient>(baseurl, use_ssl, back_cfg, l);
 
-	services = std::make_shared<servicesClient>(id, dbp, l, alert, client);
-	services->init();
-
 	ready = true;
 	updateApi();
 }
 
 void	agentClient::collect() {
+	Json::Value data;
+	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
+	if(!client->getJSON("/all?since="+std::to_string(trunc(since)), data)) return;
+	since  = data["timestamp"].asDouble();
+
+	mysqlpp::Connection::thread_start();
+	mysqlpp::ScopedConnection db(*dbp, true);
+	if (!db) { l->error("servicesClient::collectLog", "Failed to get a connection from the pool!"); return; }
+
+	// Managing services --------------------------------------------
+	std::set<uint32_t> hosts; // hold all known hosts for this agent
+	for (Json::Value::iterator i = data["services"].begin();i!=data["services"].end();i++) {
+		uint32_t host_id = getHost((*i)["logs"]["host"].asString());
+		uint32_t serv_id = getService(host_id, i.key().asString());
+		uint32_t type_id = getServiceType((*i)["status"]["properties"]["type"].asString()); 
+		uint32_t failed  = 0;
+		uint32_t nfailed = 0;
+		uint32_t ok      = 0;
+		hosts.insert(host_id);
+		uint32_t maxlvl	 = 0;
+		std::string t    = "";
+		// Logs -------------------------------------------------
+		mysqlpp::Query ql = db->query("insert into s$log_events(serv_id, timestamp, event_type, source_name, date_field, line_no, text) values (%0:srv, %1:ts, %2:et, %3q:src, %4q:dm, %5:ln, %6q:txt) ON DUPLICATE KEY UPDATE text=%6q:txt");
+		ql.parse();
+		for (Json::Value::iterator j = (*i)["logs"]["entries"].begin();j!=(*i)["logs"]["entries"].end();j++) {
+			if(haveLogEvent(serv_id, (*j)["source"].asString(), (*j)["line_no"].asUInt(), (*j)["date_mark"].asString())) continue;
+			t+=(*j)["text"].asString()+"\n";
+			uint32_t event_type_id = getEventType((*j)["level"].asString());
+			if (maxlvl<event_type_id) maxlvl=event_type_id;
+			ql.template_defaults["srv"] = serv_id;
+			ql.template_defaults["ts"]  = (*j)["timestamp"].asDouble();
+			ql.template_defaults["et"]  = event_type_id;
+			ql.template_defaults["src"] = (*j)["source"].asCString();
+			ql.template_defaults["dm"]  = (*j)["date_mark"].asCString();
+			ql.template_defaults["ln"]  = (*j)["line_no"].asUInt();
+			ql.template_defaults["txt"] = (*j)["text"].asCString();
+			myqExec(ql, "servicesClient::collectLog", "Failed to insert a log entry")
+		}
+		if (maxlvl>0)
+			alert->sendLog(host_id, serv_id, maxlvl, t);
+
+		// Process status ---------------------------------------
+		mysqlpp::Query q = db->query("insert into s$process(serv_id, name, full_path, cwd, username, pid, status, timestamp) values (%0:srv, %1q:name, %2q:path, %3q:cwd, %4q:user, %5:pid, %6q:stts, %7:ts) ON DUPLICATE KEY UPDATE full_path=%2q:path, cwd=%3q:cwd, username=%4q:user, pid=%5:pid, status=%6q:stts, timestamp=%7:ts");
+		q.parse();
+		for (Json::Value::iterator j = (*i)["status"]["process"].begin();j!=(*i)["status"]["process"].end();j++) {
+			q.template_defaults["srv"]  = serv_id;
+			q.template_defaults["name"] = (*j)["name"].asCString();
+			q.template_defaults["path"] = (*j)["full_path"].asCString();
+			q.template_defaults["cwd"]  = (*j)["cwd"].asCString();
+			q.template_defaults["user"] = (*j)["username"].asCString();
+			q.template_defaults["stts"] = (*j)["status"].asCString();
+			q.template_defaults["ts"]   = fp_ms.count();
+			if ((*j)["status"].asString() == "ok") {
+				ok++;
+				q.template_defaults["pid"]  = (*j)["pid"].asInt();
+			} else {
+				if (!haveProcessStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString()))
+					nfailed++;
+				failed++;
+				q.template_defaults["pid"]  = 0;
+			}
+			myqExec(q, "servicesClient::collect", "Failed to insert process")
+		}
+
+		// Sockets status ---------------------------------------
+		mysqlpp::Query q2 = db->query("insert into s$sockets(serv_id, name, status, timestamp) values (%0:srv, %1q:name, %2q:stts, %3:ts) ON DUPLICATE KEY UPDATE status=%2q:stts, timestamp=%3:ts");
+		q2.parse();
+		for (Json::Value::iterator j = (*i)["status"]["sockets"].begin();j!=(*i)["status"]["sockets"].end();j++) {
+			if ((*j)["status"].asString() != "ok") {
+				if (!haveSocketStatus(serv_id,(*j)["name"].asString(),(*j)["status"].asString()))
+					nfailed++;
+				failed++;
+			} else	ok++;
+			q2.template_defaults["srv"]  = serv_id;
+			q2.template_defaults["name"] = (*j)["name"].asCString();
+			q2.template_defaults["stts"] = (*j)["status"].asCString();
+			q2.template_defaults["ts"]   = fp_ms.count();
+			myqExec(q2, "servicesClient::collect", "Failed to insert socket")
+		}
+		if (nfailed>0) {
+			std::string msg="Service "+i.key().asString()+" on "+(*i)["host"].asString()+" have "+std::to_string(failed)+" failed componant";
+			alert->sendService(host_id, serv_id, msg);
+		}
+		
+		// Service type -----------------------------------------
+		mysqlpp::Query qt = db->query("update s$services set type_id=%0:t where id=%1:s");
+		qt.parse();
+		qt.template_defaults["t"] = type_id;
+		qt.template_defaults["s"] = serv_id;
+		myqExec(qt, "servicesClient::collect", "Failed to update type")
+
+		// Service status ---------------------------------------
+		mysqlpp::Query p = db->query("insert into s$history(serv_id, timestamp, failed, missing, ok) values (%0:s, %1:t, %2:f, 0, %3:o) ON DUPLICATE KEY UPDATE failed=%2:f, ok=%3:o");
+		p.parse();
+		p.template_defaults["s"] = serv_id;
+		p.template_defaults["t"] = fp_ms.count();
+		p.template_defaults["f"] = failed;
+		p.template_defaults["o"] = ok;
+		myqExec(p, "servicesClient::collect", "Failed to insert history")
+	}
+
+	// update history for missing service on known hosts ------------
+	for (std::set<uint32_t>::iterator i = hosts.begin();i!=hosts.end();i++) {
+		mysqlpp::Query p = db->query("insert into s$history select s.id as serv_id, %0:t as timestamp, 0 as failed, ifnull(p.cnt,0)+ifnull(o.cnt,0) as missing, 0 as ok from s$services s left join (select serv_id, count(*) as cnt from s$process group by serv_id) p on s.id=p.serv_id left join (select serv_id, count(*) as cnt from s$sockets group by serv_id) o on s.id=o.serv_id where s.id not in (select serv_id from s$history where timestamp>=%0:t) and host_id=%1:h");
+		p.parse();
+		p.template_defaults["t"] = fp_ms.count();
+		p.template_defaults["h"] = *i;
+		myqExec(p, "servicesClient::collect", "Failed to insert missing history")
+	}
+
+	mysqlpp::Connection::thread_end();
+
 	std::unique_lock<std::mutex> locker(lock);
-	services->collect();
-	services->collectLog();
-	for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it)
-		(*it)->collect();
+	for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it) {
+		std::vector<std::string> strings;
+		std::istringstream base((*it)->getBaseUrl());
+		std::string s;
+		while (getline(base, s, '/'))
+			strings.push_back(s);
+
+		if ((*it)->isServiceSet())
+			(*it)->parse(&(data["services"][(*it)->getServName()]["collectors"][strings[3]][strings[4]]));
+		else
+			(*it)->parse(&(data["system"][strings[2]][strings[3]]));
+	}
 }
 
 void agentClient::startThread() {
@@ -268,7 +385,6 @@ void agentClient::startThread() {
 	my_thread = std::thread ([this](){
 		while(this->active) {
 			collect();
-			l->notice("agentClient::thread", "agent id="+std::to_string(id)+" Waiting for "+std::to_string(pool_freq)+"s");
 			std::this_thread::sleep_for(std::chrono::seconds(pool_freq));
 		}
 	});

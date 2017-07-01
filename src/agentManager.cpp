@@ -38,6 +38,7 @@ void	agentManager::init(Json::Value* p_aggregCfg, std::string p_me, std::string 
 	updateAgents();
 	std::this_thread::sleep_for(std::chrono::seconds(2)); // give enough time for the agentClients to be ready
 	aggreg->init();
+	l->notice("agentManager::init", "Backend started and ready");
 }
 
 void	agentManager::startThreads() {

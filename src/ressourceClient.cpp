@@ -119,12 +119,6 @@ double  ressourceClient::getSince() {
 
 void	ressourceClient::collect() {
 	std::string url = baseurl;
-	std::string id_name = "host_id";
-	std::string typed = "h$";
-	if (isService) {
-		typed   = "s$";
-		id_name = "serv_id";
-	}
 	// Get the last timestamp collected
 	double since = getSince();
 	if (since >0)
@@ -133,7 +127,16 @@ void	ressourceClient::collect() {
 	// Get the lastest data from the agent
 	Json::Value data;
 	if(!client->getJSON(url, data)) return;
+	parse(&data);
+}
 
+void	ressourceClient::parse(Json::Value *p_data) {
+	std::string id_name = "host_id";
+	std::string typed = "h$";
+	if (isService) {
+		typed   = "s$";
+		id_name = "serv_id";
+	}
 	// Load that data into database
 	mysqlpp::Connection::thread_start();
 	mysqlpp::ScopedConnection db(*dbp, true);
@@ -141,7 +144,7 @@ void	ressourceClient::collect() {
 	mysqlpp::Query insertQuery = db->query();
 	insertQuery << baseInsert;
 	insertQuery.parse();
-	for (const Json::Value& line : data) {
+	for (const Json::Value& line : *p_data) {
 		// compare values to the factory
 		for (std::vector< std::shared_ptr<struct res_event> >::iterator it = event_factory.begin() ; it != event_factory.end(); ++it) {
 			std::shared_ptr<struct res_event> e = *it;
