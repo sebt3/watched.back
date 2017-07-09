@@ -49,9 +49,7 @@ void	agentManager::startThreads() {
 
 void	agentManager::updateAgents() {
 	uint16_t count=0;
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("agentManager::updateAgents", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("agentManager::updateAgents", "Failed to get a connection from the pool!"); return; }
 	int domains = (*back_cfg)["central_id"].asInt();
 	mysqlpp::Query query = db->query("select id from c$agents");
 	if (domains>0) {
@@ -67,8 +65,8 @@ void	agentManager::updateAgents() {
 				agents[row[0]] = std::make_shared<agentClient>(row[0], dbp, l, alert, back_cfg);
 				agents[row[0]]->init();
 				count++;
-			} else
-				agents[row[0]]->updateApi();
+			} /*else
+				agents[row[0]]->updateApi();*/
 		}
 		if (count>0)
 			l->info("agentManager::updateAgents","Started "+std::to_string(count)+" agents");
@@ -89,8 +87,8 @@ void	agentManager::updateAgents() {
 	f.template_defaults["ts"] = fp_ms.count();
 	myqExec(f, "agentManager::updateAgents", "Failed to insert failed backends status")
 	// TODO: alert for failed backend
-	
-	mysqlpp::Connection::thread_end();
+
+	release();
 }
 
 }

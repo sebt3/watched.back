@@ -14,7 +14,7 @@ std::map<std::string, alerter_maker_t* > alerterFactory;
  * alerter
  */
 
-alerter::alerter(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l): dbTools(p_db, p_l) { }
+alerter::alerter(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l): dbTools(p_db, p_l, "alerter") { }
 alerter::~alerter() {}
 
 /*********************************
@@ -43,7 +43,7 @@ void	luaAlerter::sendAlert(alerter::levels p_lvl, const std::string p_dest, cons
  * alerterManager
  */
 
-alerterManager::alerterManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg): dbTools(p_db,p_l),cfg(p_cfg) {
+alerterManager::alerterManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, Json::Value* p_cfg): dbTools(p_db,p_l, "alerterManager"),cfg(p_cfg) {
 	if (!cfg->isMember("alerter_cpp"))
 		(*cfg)["alerter_cpp"] = WATCHED_DLL_ALERT;
 	if (!cfg->isMember("alerter_lua"))
@@ -112,21 +112,15 @@ alerterManager::alerterManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log
 }
 
 void	alerterManager::addAlerter(const std::string p_name) {
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("alerterManager::addAlerter", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("alerterManager::addAlerter", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query("insert into c$properties(name) values(%0q:name) on duplicate key update name=%0q:name");
 	query.parse();
 	query.template_defaults["name"] = p_name.c_str();
 	myqExec(query, "alerterManager::addAlerter", "Failed to insert alerter")
-
-	mysqlpp::Connection::thread_end();
 }
 
 void	alerterManager::sendService(uint32_t p_host_id, uint32_t p_serv_id, std::string p_msg) {
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("alerterManager::sendService", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("alerterManager::sendService", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query("select p.name, a.value from p$alert_services a, c$properties p where a.prop_id=p.id and serv_id=%0:id");
 	query.parse();
 	query.template_defaults["id"] = p_serv_id;
@@ -138,15 +132,12 @@ void	alerterManager::sendService(uint32_t p_host_id, uint32_t p_serv_id, std::st
 			send(alerter::critical, (*i)[0].c_str(),(*i)[1].c_str(), p_msg, p_msg);
 	}
 	} myqCatch(query, "alerterManager::sendService","Failed to get alerters for service "+std::to_string(p_serv_id))
-	mysqlpp::Connection::thread_end();
 }
 
 void	alerterManager::sendLog(uint32_t p_host_id, uint32_t p_serv_id, uint32_t p_level, std::string p_lines) {
 	std::string t="Service "+getServiceName(p_host_id,p_serv_id)+" on "+getHostName(p_host_id)+" new log elements";
 
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("alerterManager::sendLog", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("alerterManager::sendLog", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query("select p.name, a.value from p$alert_services a, c$properties p where a.prop_id=p.id and serv_id=%0:id");
 	query.parse();
 	query.template_defaults["id"] = p_serv_id;
@@ -158,7 +149,6 @@ void	alerterManager::sendLog(uint32_t p_host_id, uint32_t p_serv_id, uint32_t p_
 			send((alerter::levels)p_level, (*i)[0].c_str(),(*i)[1].c_str(), t, p_lines);
 	}
 	} myqCatch(query, "alerterManager::sendLog","Failed to get alerters for service "+std::to_string(p_serv_id))
-	mysqlpp::Connection::thread_end();
 }
 
 void	alerterManager::sendServRessource(uint32_t p_serv_id, uint32_t p_res_id, std::shared_ptr<res_event> p_event, double p_current) {
@@ -166,9 +156,7 @@ void	alerterManager::sendServRessource(uint32_t p_serv_id, uint32_t p_res_id, st
 	std::string t="Service "+getServiceName(host_id,p_serv_id)+" on "+getHostName(host_id)+" resource "+getRessourceName(p_res_id)+" new event";
 	std::string m="Service:\t "+getServiceName(host_id,p_serv_id)+"\nHost:\t\t "+getHostName(host_id)+"\nRessource:\t "+getRessourceName(p_res_id)+"\nProperty:\t "+p_event->property+"\nRule:\t\t "+std::to_string(p_current)+p_event->oper+std::to_string(p_event->value);
 
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("alerterManager::sendServRessource", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("alerterManager::sendServRessource", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query("select p.name, a.value from p$alert_services a, c$properties p where a.prop_id=p.id and serv_id=%0:id");
 	query.parse();
 	query.template_defaults["id"] = p_serv_id;
@@ -180,16 +168,13 @@ void	alerterManager::sendServRessource(uint32_t p_serv_id, uint32_t p_res_id, st
 			send((alerter::levels)p_event->event_type, (*i)[0].c_str(),(*i)[1].c_str(), t, m);
 	}
 	} myqCatch(query, "alerterManager::sendServRessource","Failed to get alerters for service "+std::to_string(p_serv_id))
-	mysqlpp::Connection::thread_end();
 }
 
 void	alerterManager::sendHostRessource(uint32_t p_host_id, uint32_t p_res_id, std::shared_ptr<res_event> p_event, double p_current) {
 	std::string t="Host "+getHostName(p_host_id)+" resource "+getRessourceName(p_res_id)+" new event";
 	std::string m="Host:\t\t "+getHostName(p_host_id)+"\nRessource:\t "+getRessourceName(p_res_id)+"\nProperty:\t "+p_event->property+"\nRule:\t\t "+std::to_string(p_current)+p_event->oper+std::to_string(p_event->value);
 
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("alerterManager::sendHostRessource", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("alerterManager::sendHostRessource", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query("select p.name, a.value from p$alert_hosts a, c$properties p where a.prop_id=p.id and host_id=%0:id");
 	query.parse();
 	query.template_defaults["id"] = p_host_id;
@@ -201,7 +186,6 @@ void	alerterManager::sendHostRessource(uint32_t p_host_id, uint32_t p_res_id, st
 			send((alerter::levels)p_event->event_type, (*i)[0].c_str(),(*i)[1].c_str(), t, m);
 	}
 	} myqCatch(query, "alerterManager::sendHostRessource","Failed to get alerters for host "+std::to_string(p_host_id))
-	mysqlpp::Connection::thread_end();
 }
 
 //TODO: add support for alert on host failed

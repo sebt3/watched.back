@@ -6,8 +6,7 @@
 
 namespace watcheD {
 
-agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), ready(false), active(false), id(p_id), since(0), back_cfg(p_cfg),alert(p_alert) {
-}
+agentClient::agentClient(uint32_t p_id, std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l, "agentClient"), ready(false), active(false), id(p_id), since(0), collectCount(0), back_cfg(p_cfg),alert(p_alert) { }
 
 agentClient::~agentClient() {
 	if (active) {
@@ -18,9 +17,7 @@ agentClient::~agentClient() {
 
 void agentClient::createRessources() {
 	// use the paths in the API definition to find the ressources
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("agentClient::createRessources", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("agentClient::createRessources", "Failed to get a connection from the pool!"); return; }
 	for (Json::Value::iterator i = api["paths"].begin();i!=api["paths"].end();i++) {
 		std::string res = i.key().asString().substr(1, i.key().asString().rfind("/")-1);
 		std::string origin = "service";
@@ -76,25 +73,22 @@ void agentClient::createRessources() {
 		if(!found && i->isMember("x-service")) {
 			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(servid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, alert, client);
 			rc->setService((*i)["x-service"].asString());
-			rc->init();
+			rc->init(db);
 			ressources.push_back(rc);
 		} else if (!found) {
 			// instanciate a ressourceClient
 			std::shared_ptr<ressourceClient> rc = std::make_shared<ressourceClient>(hostid, resid, i.key().asString(), tbl, 	&(api["definitions"][tbl]["properties"]), dbp, l, alert, client);
-			rc->init();
+			rc->init(db);
 			ressources.push_back(rc);
 		}
 	}
-	mysqlpp::Connection::thread_end();
 }
 
 void agentClient::createTables() {
 	// use the data definition part of the API to build tables to store data
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
 	std::string pk  = "host_id";
 	std::string fk  = "";
-	if (!db) {  l->error("agentClient::createTables", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) {  l->error("agentClient::createTables", "Failed to get a connection from the pool!"); return; }
 	for (Json::Value::iterator i = api["definitions"].begin();i!=api["definitions"].end();i++) {
 		std::string serv = "service";
 		pk  = "host_id";
@@ -152,7 +146,6 @@ void agentClient::createTables() {
 			
 		}
 	}
-	mysqlpp::Connection::thread_end();
 }
 
 void agentClient::alertFailed() {
@@ -167,9 +160,7 @@ void agentClient::updateCounter(uint32_t p_ok, uint32_t p_missing, uint32_t p_pa
 		fail = p_missing;
 		mis  = 0;
 	}
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("agentClient::updateCounter", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("agentClient::updateCounter", "Failed to get a connection from the pool!"); return; }
 
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
 	mysqlpp::Query query = db->query("insert into agt$history(agt_id, timestamp, failed, missing, parse, ok) values(%0:id,%1:ts,%2:fa,%3:mi,%4:pa,%5:ok) on duplicate key update failed=%2:fa, missing=%3:mi, parse=%4:pa, ok=%5:ok");
@@ -181,8 +172,6 @@ void agentClient::updateCounter(uint32_t p_ok, uint32_t p_missing, uint32_t p_pa
 	query.template_defaults["pa"] = p_parse;
 	query.template_defaults["ok"] = p_ok;
 	myqExec(query, "agentClient::updateCounter", "Failed to update status")
-
-	mysqlpp::Connection::thread_end();
 }
 
 
@@ -194,7 +183,7 @@ void agentClient::updateApi() {
 	uint32_t ok;
 	uint32_t missing;
 	uint32_t parse;
-	std::unique_lock<std::mutex> locker(lock);
+	//std::unique_lock<std::mutex> locker(lock);
 	client->resetCount(&ok, &missing, &parse);
 	if(ok != 0 || missing != 0 || parse != 0)
 		updateCounter(ok, missing, parse);
@@ -212,42 +201,37 @@ void agentClient::updateApi() {
 		return true;
 	}), ressources.end());
 	l->info("agentClient::updateApi", "Agent "+std::to_string(id)+"("+baseurl+"), API knowledge updated");
+	release();
 }
 
 void agentClient::init() {
 	if (ready) return;
 	bool use_ssl = false;
-	// 1st build the base URL
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("agentClient::init", "Failed to get a connection from the pool!"); return; }
+	if (!grab()) { l->error("agentClient::init", "Failed to get a connection from the pool!"); return; }
 	mysqlpp::Query query = db->query("select host, port, pool_freq, use_ssl from c$agents where id=%0:id");
 	query.parse();
 	query.template_defaults["id"] = id;
 	try {
-	if (mysqlpp::StoreQueryResult res = query.store()) {
-		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
-		if (row[0] == "localhost") {
-			baseurl = "127.0.0.1:";
-		} else {
-			baseurl = row[0].c_str();
-			baseurl.append(":");
+		if (mysqlpp::StoreQueryResult res = query.store()) {
+			mysqlpp::Row row = *res.begin(); // there should be only one row anyway
+			if (row[0] == "localhost") {
+				baseurl = "127.0.0.1:";
+			} else {
+				baseurl = row[0].c_str();
+				baseurl.append(":");
+			}
+			baseurl.append(row[1].c_str());
+			pool_freq = row[2];
+			if (atoi(row[3].c_str())==1)
+				use_ssl=true;
 		}
-		baseurl.append(row[1].c_str());
-		pool_freq = row[2];
-		if (atoi(row[3].c_str())==1)
-			use_ssl=true;
-	}
-	else {
-		l->error("agentClient::createTables", "Cannot look for agent id="+std::to_string(id));
-		mysqlpp::Connection::thread_end();
-		return;
-	}
+		else {
+			l->error("agentClient::createTables", "Cannot look for agent id="+std::to_string(id));
+			return;
+		}
 	} myqCatch(query, "agentClient::init","Failed to get agent configuration")
-	mysqlpp::Connection::thread_end();
-	client = std::make_shared<HttpClient>(baseurl, use_ssl, back_cfg, l);
-
-	ready = true;
+	client	= std::make_shared<HttpClient>(baseurl, use_ssl, back_cfg, l);
+	ready	= true;
 	updateApi();
 }
 
@@ -256,10 +240,8 @@ void	agentClient::collect() {
 	std::chrono::duration<double, std::milli> fp_ms = std::chrono::system_clock::now().time_since_epoch();
 	if(!client->getJSON("/all?since="+std::to_string(trunc(since)), data)) return;
 	since  = data["timestamp"].asDouble();
+	if (!grab()) { l->error("agentClient::collect", "Failed to get a connection from the pool!"); return; }
 
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("servicesClient::collectLog", "Failed to get a connection from the pool!"); return; }
 
 	// Managing services --------------------------------------------
 	std::set<uint32_t> hosts; // hold all known hosts for this agent
@@ -362,9 +344,7 @@ void	agentClient::collect() {
 		myqExec(p, "servicesClient::collect", "Failed to insert missing history")
 	}
 
-	mysqlpp::Connection::thread_end();
-
-	std::unique_lock<std::mutex> locker(lock);
+	//std::unique_lock<std::mutex> locker(lock);
 	for (std::vector< std::shared_ptr<ressourceClient> >::iterator it = ressources.begin() ; it != ressources.end(); ++it) {
 		std::vector<std::string> strings;
 		std::istringstream base((*it)->getBaseUrl());
@@ -373,9 +353,9 @@ void	agentClient::collect() {
 			strings.push_back(s);
 
 		if ((*it)->isServiceSet())
-			(*it)->parse(&(data["services"][(*it)->getServName()]["collectors"][strings[3]][strings[4]]));
+			(*it)->parse(db, &(data["services"][(*it)->getServName()]["collectors"][strings[3]][strings[4]]));
 		else
-			(*it)->parse(&(data["system"][strings[2]][strings[3]]));
+			(*it)->parse(db, &(data["system"][strings[2]][strings[3]]));
 	}
 }
 
@@ -383,10 +363,18 @@ void agentClient::startThread() {
 	if (!ready || active) return;
 	active=true;
 	my_thread = std::thread ([this](){
+		mysqlpp::Connection::thread_start();
 		while(this->active) {
+			if (collectCount>5) {
+				updateApi();
+				collectCount=0;
+			}
+			collectCount++;
 			collect();
+			release();
 			std::this_thread::sleep_for(std::chrono::seconds(pool_freq));
 		}
+		mysqlpp::Connection::thread_end();
 	});
 }
 

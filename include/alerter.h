@@ -4,6 +4,7 @@
 #include <string>
 #include <mutex>
 #include <json/json.h>
+#include <mysql++/mysql++.h>
 
 namespace watcheD {
 
@@ -34,8 +35,10 @@ class dbPool;
  */
 class dbTools {
 public:
-	dbTools(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l) : dbp(p_db), l(p_l) { }
+	dbTools(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::string cn = "unknown") : dbp(p_db), db(NULL), l(p_l), className(cn) { }
 protected:
+	bool		grab();
+	void		release();
 	bool		haveTable(std::string p_name);
 	bool		tableHasColumn(std::string p_name, std::string p_col);
 	bool		haveRessource(std::string p_origin, std::string p_name);
@@ -59,7 +62,10 @@ protected:
 	bool		haveProcessStatus(uint32_t p_serv_id, std::string p_name, std::string p_status);
 	bool		haveSocketStatus(uint32_t p_serv_id, std::string p_name, std::string p_status);
 	std::shared_ptr<dbPool>	dbp;
+	mysqlpp::Connection	*db;
 	std::shared_ptr<log>	l;
+private:
+	std::string className;
 };
 
 /*********************************

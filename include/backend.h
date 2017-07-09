@@ -113,16 +113,19 @@ private:
  */
 class dbPool : public mysqlpp::ConnectionPool {
 public:
-	dbPool(Json::Value* p_cfg) :cfg(p_cfg), usedCount(0) { }
+	dbPool(Json::Value* p_cfg) :cfg(p_cfg), usedCount(0) {
+		poolSize = (*cfg)["pool_size"].asInt();
+	}
 	~dbPool() { clear(); }
 	mysqlpp::Connection* grab() {
-		unsigned int pool_size = (*cfg)["pool_size"].asInt();
-		while (usedCount > pool_size)
+		//std::cout << "dbPool GRAB--- " << usedCount << " > " << size() << std::endl;
+		while (usedCount > poolSize)
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		++usedCount;
 		return mysqlpp::ConnectionPool::grab();
 	}
 	void release(const mysqlpp::Connection* pc) {
+		//std::cout << "dbPool release " << usedCount << " > " << size() << std::endl;
 		mysqlpp::ConnectionPool::release(pc);
 		--usedCount;
 	}
@@ -130,10 +133,13 @@ protected:
 	mysqlpp::Connection* create() {
 		return new mysqlpp::Connection((*cfg)["database_name"].asCString(), (*cfg)["connection_string"].asCString(), (*cfg)["login"].asCString(), (*cfg)["password"].asCString());
 	}
-	void destroy(mysqlpp::Connection* cp){ delete cp; }
-	unsigned int max_idle_time() { return 10; }
+	void destroy(mysqlpp::Connection* cp){
+		delete cp;
+	}
+	unsigned int max_idle_time() { return 3; }
 private:
 	Json::Value* cfg;
+	unsigned int poolSize;
 	unsigned int usedCount;
 
 };
@@ -143,18 +149,15 @@ private:
  */
 class ressourceClient : public dbTools {
 public:
-	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), servName(""), def(p_def), client(p_client), alert(p_alert) { }
-	void		init();
-	void		collect();
-	void		parse(Json::Value *p_data);
+	ressourceClient(uint32_t p_host_id, uint32_t p_resid, std::string p_url, std::string p_table, Json::Value *p_def, std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, std::shared_ptr<HttpClient> p_client) : dbTools(p_db, p_l, "ressourceClient"), isService(false), host_id(p_host_id), res_id(p_resid), baseurl(p_url), table(p_table), servName(""), def(p_def), client(p_client), alert(p_alert) { }
+	void		init(mysqlpp::Connection *p_db);
+	void		parse(mysqlpp::Connection *p_db, Json::Value *p_data);
 	std::string	getBaseUrl() { return baseurl; }
 	std::string	getServName() { return servName; }
 	void		setService(std::string n) { servName=n; isService = true; }
 	void		updateDefs(Json::Value *p_def);
 	bool		isServiceSet() {return isService; };
 private:
-	double  getSince();
-
 	bool			isService;
 	uint32_t		host_id;
 	uint32_t		res_id;
@@ -191,6 +194,7 @@ private:
 	bool				active;
 	uint32_t			id;
 	double				since;
+	uint16_t			collectCount;
 	std::shared_ptr<HttpClient>	client;
 	std::string			baseurl;
 	Json::Value			api;
@@ -199,7 +203,7 @@ private:
 	std::vector< std::shared_ptr<ressourceClient> >		ressources;
 	Json::Value* 			back_cfg;
 	std::shared_ptr<alerterManager> alert;
-	std::mutex			lock;
+//	std::mutex			lock;
 };
 
 /*********************************
@@ -239,7 +243,7 @@ private:
  */
 class agentManager : public dbTools {
 public:
-	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l), back_cfg(p_cfg), alert(p_alert), back_id(0) { }
+	agentManager(std::shared_ptr<dbPool> p_db, std::shared_ptr<log> p_l, std::shared_ptr<alerterManager> p_alert, Json::Value* p_cfg) : dbTools(p_db, p_l, "agentManager"), back_cfg(p_cfg), alert(p_alert), back_id(0) { }
 	void	init(Json::Value* p_aggregCfg, std::string p_me, std::string p_cfgfile);
 	void	startThreads();
 	void	updateAgents();

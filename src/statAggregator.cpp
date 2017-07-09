@@ -6,7 +6,7 @@
 
 namespace watcheD {
 
-statAggregator::statAggregator(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_aggregCfg) : dbTools(p_db, p_l), active(false), cfg(p_aggregCfg) {
+statAggregator::statAggregator(std::shared_ptr<dbPool>	p_db, std::shared_ptr<log> p_l, Json::Value* p_aggregCfg) : dbTools(p_db, p_l, "statAggregator"), active(false), cfg(p_aggregCfg) {
 }
 
 void	statAggregator::init(){
@@ -18,10 +18,10 @@ void	statAggregator::startThread() {
 	active=true;
 	my_thread = std::thread ([this](){
 	const int sec2day = 60*60*24;
-	while (active) {
-		mysqlpp::Connection::thread_start();
-		mysqlpp::ScopedConnection db(*dbp, true);
-		if (!db) { l->error("statAggregator::thread", "Failed to get a connection from the pool!"); return; }
+	mysqlpp::Connection::thread_start();
+	while (active) { 
+	{
+		if (!grab()) { l->error("statAggregator::thread", "Failed to get a connection from the pool!"); return; }
 
 		mysqlpp::Query query = db->query("select data_type, delay_am, delay_ah, delay_ad, retention_d, retention_am, retention_ah, retention_ad from c$data_configs");
 		try {
@@ -194,9 +194,11 @@ void	statAggregator::startThread() {
 				i->second->next_high = fp_ms + std::chrono::hours(12);
 			}
 		}
-		mysqlpp::Connection::thread_end();
+		}
+		release();
 		std::this_thread::sleep_for(std::chrono::minutes(thread_freq));
 	}
+	mysqlpp::Connection::thread_end();
 	});
 }
 

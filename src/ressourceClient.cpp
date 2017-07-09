@@ -7,7 +7,8 @@
 
 namespace watcheD {
 
-void	ressourceClient::init() {
+void	ressourceClient::init(mysqlpp::Connection *p_db) {
+	db = p_db;
 	// define the base insert string
 	std::string id_name = "host_id";
 	std::string typed = "h$";
@@ -17,9 +18,6 @@ void	ressourceClient::init() {
 	}
 
 	updateDefs(def);
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("ressourceClient::init", "Failed to get a connection from the pool!"); return; }
 	// load current events
 	mysqlpp::Query q1 = db->query("select id, event_type, property, oper, value from "+typed+"res_events where end_time is null and %0:nid=%1:hid and res_id=%2:rid");
 	q1.parse();
@@ -61,7 +59,6 @@ void	ressourceClient::init() {
 		}
 	}
 	} myqCatch(q2,"ressourceClient::init","Failed to get event factory for "+table)
-	mysqlpp::Connection::thread_end();
 }
 
 void ressourceClient::updateDefs(Json::Value *p_def) {
@@ -91,59 +88,14 @@ void ressourceClient::updateDefs(Json::Value *p_def) {
 	baseInsert = insert.str();
 }
 
-double  ressourceClient::getSince() {
-	std::string id_name = "host_id";
-	if (isService)
-		id_name = "serv_id";
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("ressourceClient::getSince", "Failed to get a connection from the pool!"); return -1; }
-	mysqlpp::Query query = db->query("select max(timestamp) from d$%0:table where %1:nid=%2:hid and res_id=%3:rid");
-	query.parse();
-	query.template_defaults["table"] = table.c_str();
-	query.template_defaults["nid"] = id_name.c_str();
-	query.template_defaults["hid"] = host_id;
-	query.template_defaults["rid"] = res_id;
-	try {
-	if (mysqlpp::StoreQueryResult res = query.store()) {
-		mysqlpp::Row row = *res.begin(); // there should be only one row anyway
-		if (row[0]!=mysqlpp::null) {
-			mysqlpp::Connection::thread_end();
-			return double(row[0]);
-		}
-	}
-	} myqCatch(query, "ressourceClient::getSince","Failed to get max(timestamp) from d$"+table)
-	mysqlpp::Connection::thread_end();
-	return -1;
-}
-
-void	ressourceClient::collect() {
-	std::string url = baseurl;
-	// Get the last timestamp collected
-	double since = getSince();
-	if (since >0)
-		url += "\?since="+std::to_string(since);
-
-	// Get the lastest data from the agent
-	Json::Value data;
-	if(!client->getJSON(url, data)) return;
-	parse(&data);
-}
-
-void	ressourceClient::parse(Json::Value *p_data) {
+void	ressourceClient::parse(mysqlpp::Connection *p_db, Json::Value *p_data) {
+	db = p_db;
 	std::string id_name = "host_id";
 	std::string typed = "h$";
 	if (isService) {
 		typed   = "s$";
 		id_name = "serv_id";
 	}
-	// Load that data into database
-	mysqlpp::Connection::thread_start();
-	mysqlpp::ScopedConnection db(*dbp, true);
-	if (!db) { l->error("ressourceClient::collect", "Failed to get a connection from the pool!"); return; }
-	mysqlpp::Query insertQuery = db->query();
-	insertQuery << baseInsert;
-	insertQuery.parse();
 	for (const Json::Value& line : *p_data) {
 		// compare values to the factory
 		for (std::vector< std::shared_ptr<struct res_event> >::iterator it = event_factory.begin() ; it != event_factory.end(); ++it) {
@@ -229,6 +181,10 @@ void	ressourceClient::parse(Json::Value *p_data) {
 			}
 		}
 
+		// Load that data into database
+		mysqlpp::Query insertQuery = db->query();
+		insertQuery << baseInsert;
+		insertQuery.parse();
 		// insert the value
 		for (Json::Value::iterator j = def->begin();j!=def->end();j++) {
 			std::string k = j.key().asString();
@@ -236,7 +192,6 @@ void	ressourceClient::parse(Json::Value *p_data) {
 		}
 		myqExec(insertQuery, "ressourceClient::collect", "Insert a value in "+table+" ("+std::to_string(host_id)+","+std::to_string(res_id)+"): "+baseInsert)
 	}
-	mysqlpp::Connection::thread_end();
 }
 
 }

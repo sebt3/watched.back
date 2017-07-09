@@ -23,15 +23,15 @@ int main(int argc, char *argv[]) {
 	std::shared_ptr<dbPool>		db	= std::make_shared<dbPool>(cfg->getDB());
 	std::shared_ptr<watcheD::log>	l	= std::make_shared<watcheD::log>(cfg->getLog());
 	std::shared_ptr<alerterManager> alert	= std::make_shared<alerterManager>(db, l, cfg->getAlerter());
-	std::shared_ptr<agentManager>	ac	= std::make_shared<agentManager>(db, l, alert, bcfg);
+	std::shared_ptr<agentManager>	am	= std::make_shared<agentManager>(db, l, alert, bcfg);
 	cfg->save();
-	ac->init(cfg->getAggregate(), argv[0], cfgfile);
+	am->init(cfg->getAggregate(), argv[0], cfgfile);
 	cfg->save();
-	ac->startThreads();
+	am->startThreads();
 	
 	while (true) {
 		std::this_thread::sleep_for(std::chrono::seconds((*bcfg)["pool_freq"].asInt()));
-		ac->updateAgents();
-		ac->startThreads(); // starting missing agents
+		am->updateAgents();
+		am->startThreads(); // starting missing agents
 	}
 }
